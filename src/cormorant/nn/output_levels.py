@@ -108,6 +108,32 @@ class OutputPMLP(nn.Module):
 
         return predict
 
+class OutputEdgeMLP(nn.Module):
+    def __init__(self, num_channels_in, num_out=1, num_hidden=1, layer_width=256, activation='leakyrelu', device=torch.device('cpu'), dtype=torch.float):
+        super(OutputEdgeMLP, self).__init__()
+
+        self.num_channels_in = num_channels_in
+
+        self.mlp = BasicMLP(2*num_channels_in, num_out, num_hidden=num_hidden,
+                            layer_width=layer_width, activation=activation,
+                            device=device, dtype=dtype)
+
+        self.zero = torch.tensor(0, device=device, dtype=dtype)
+
+    def forward(self, edge_scalars, edge_mask):
+        # Reshape scalars appropriately
+        es = edge_scalars.shape
+        edge_scalars = edge_scalars.view(es[0:3] + (self.num_channels_in * 2,))
+
+        # First MLP applied to each atom
+        x = self.mlp(edge_scalars)
+
+        # Zero out masked elements.
+        # predict = x * edge_mask.unsqueeze(dim=-1).float()
+        predict = torch.where(edge_mask.unsqueeze(dim=-1), x, self.zero) 
+        return predict
+
+
 
 class OutputMPNN(nn.Module):
     def __init__(self, channels_in, num_levels=1,

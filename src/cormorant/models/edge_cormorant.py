@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 import logging
 
@@ -9,7 +10,7 @@ from cormorant.models.cormorant_levels import CormorantAtomLevel, CormorantEdgeL
 
 from cormorant.nn import RadialFilters
 from cormorant.nn import InputLinear, InputMPNN, InputMPNN_old
-from cormorant.nn import OutputLinear, OutputPMLP, GetScalars
+from cormorant.nn import OutputEdgeMLP, GetScalars
 from cormorant.nn import scalar_mult_rep
 from cormorant.models.cormorant import expand_var_list
 
@@ -129,16 +130,14 @@ class EdgeCormorant(nn.Module):
 
         self.tau_levels_all = [level.taus for level in atom_levels]
         self.tau_levels_out = [level.tau_out for level in atom_levels]
-
-        self.scalar_func = GetScalars(self.tau_levels_out, device=device, dtype=dtype)
-
-        num_scalars = self.scalar_func.num_scalars
+        self.tau_levels_out = [level.tau_out for level in atom_levels]
+        num_mlp_channels = np.sum(self.tau_levels_out)
 
         top = top.lower()
-        if top == 'linear':
-            self.top_func = OutputLinear(num_scalars, bias=True, device=self.device, dtype=self.dtype)
-        elif top == 'pmlp':
-            self.top_func = OutputPMLP(num_scalars, activation=activation, device=self.device, dtype=self.dtype)
+        # if top == 'linear':
+        #     self.top_func = OutputLinear(num_scalars, bias=True, device=self.device, dtype=self.dtype)
+        if top == 'mlp':
+            self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=1, activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of top of network! {}'.format(top))
 
@@ -182,20 +181,12 @@ class EdgeCormorant(nn.Module):
             edges_all.append(edge_net)
 
         # Reshape the edge values into a single block
-        print([type(er) for er in edge_reps])
         stacked_edges = []
         for i, edge_reps_i in enumerate(edges_all):
-            print([eri.size() for eri in edge_reps_i])
             stacked_edges.append(torch.cat(edge_reps_i, dim=3))
-        sizes = [er.size() for er in stacked_edges]
         all_edge_tensor = torch.cat(stacked_edges, dim=3)
-        es = all_edge_tensor.size()
-        all_edge_tensor = all_edge_tensor.view(es[0], es[1], es[2], es[3] * es[4])
-        
-        prediction = self.top_func(scalars, atom_mask)
 
-        raise Exception
-
+        prediction = self.top_func(all_edge_tensor, edge_mask)
         # Covariance test
         if covariance_test:
             return prediction, atoms_all, atoms_all
