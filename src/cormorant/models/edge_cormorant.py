@@ -17,7 +17,9 @@ from cormorant.models.cormorant import expand_var_list
 
 class EdgeCormorant(nn.Module):
     """
-    A basic example of a Cormorant architecture, as used in ?????. The network consists of one or more MPNN layers, followed by one or more c
+    An example of the Cormorant architecture used to predict edge feautures.
+    The network consists of one or more MPNN layers, followed by one or more 
+    CG layers, followed by an edge MPNN.
 
     Parameters
     ----------
@@ -36,6 +38,8 @@ class EdgeCormorant(nn.Module):
         Type of radial cutoff to use.
     soft_cut_rad : scalar or list of scalars.
         Cutoff radius for the soft cutoff.
+    hard_cut_rad : scalar or list of scalars.
+        Cutoff radius for the hard cutoff.
 
     Notes
     -----
