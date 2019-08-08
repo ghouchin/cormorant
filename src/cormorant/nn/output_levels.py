@@ -108,7 +108,28 @@ class OutputPMLP(nn.Module):
 
         return predict
 
+
 class OutputEdgeMLP(nn.Module):
+    """
+    Runs an MLP on the values on each edge, without communication.
+
+    Parameters
+    ----------
+    num_channels_in : int
+        Number of input channels for every edge
+    num_out : int
+        Number of output channels for every edge
+    num_hidden : int
+        Number of hidden layers to use
+    layer_width : int
+        width of the hidden layers.
+    activation : str
+        Activation function to use for the nonlinearity.
+    device : pytorch device object
+        Computer architecture the code is being run on.
+    dtype : pytorch datatype
+        Type of pytorch datatype
+    """
     def __init__(self, num_channels_in, num_out=1, num_hidden=1, layer_width=256, activation='leakyrelu', device=torch.device('cpu'), dtype=torch.float):
         super(OutputEdgeMLP, self).__init__()
 
@@ -121,6 +142,26 @@ class OutputEdgeMLP(nn.Module):
         self.zero = torch.tensor(0, device=device, dtype=dtype)
 
     def forward(self, edge_scalars, edge_mask):
+        """
+        Runs a forward pass of the network.
+
+        Parameters
+        ----------
+        edge_scalars : pytorch tensor
+            The information to run on every edge.  Expected to be of
+            size b x N x N x num_channels_in x 2, where b is the batch size,
+            N is the max number of atoms, and the 2 is due to complex
+            arithmetic.
+        edge_mask : pytorch tensor of bits.
+            Masking tensor: 1 if a nonzero output should be returned for that
+            edge and zero otherwise.  Depending on the application this may not
+            always be the same as edge_mask used in the cormorant class.
+
+        Returns
+        -------
+        prediction : pytorch tensor
+            Predicted values on the edges.  Of size b x N x N x num_out.
+        """
         # Reshape scalars appropriately
         es = edge_scalars.shape
         edge_scalars = edge_scalars.view(es[0:3] + (self.num_channels_in * 2,))
@@ -130,8 +171,8 @@ class OutputEdgeMLP(nn.Module):
 
         # Zero out masked elements.
         # predict = x * edge_mask.unsqueeze(dim=-1).float()
-        predict = torch.where(edge_mask.unsqueeze(dim=-1), x, self.zero) 
-        return predict
+        prediction = torch.where(edge_mask.unsqueeze(dim=-1), x, self.zero)
+        return prediction
 
 
 
