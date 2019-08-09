@@ -140,7 +140,7 @@ class EdgeCormorant(nn.Module):
         top = top.lower()
         if top == 'linear':
             self.top_func = OutputEdgeLinear(num_mlp_channels, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
-        if top == 'mlp':
+        elif top == 'mlp':
             self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=num_out, activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of top of network! {}'.format(top))
