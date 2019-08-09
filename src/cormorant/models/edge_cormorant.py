@@ -10,7 +10,7 @@ from cormorant.models.cormorant_levels import CormorantAtomLevel, CormorantEdgeL
 
 from cormorant.nn import RadialFilters
 from cormorant.nn import InputLinear, InputMPNN, InputMPNN_old
-from cormorant.nn import OutputEdgeMLP, GetScalars
+from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalars
 from cormorant.nn import scalar_mult_rep
 from cormorant.models.cormorant import expand_var_list
 
@@ -18,7 +18,7 @@ from cormorant.models.cormorant import expand_var_list
 class EdgeCormorant(nn.Module):
     """
     An example of the Cormorant architecture used to predict edge feautures.
-    The network consists of one or more MPNN layers, followed by one or more 
+    The network consists of one or more MPNN layers, followed by one or more
     CG layers, followed by an edge MPNN.
 
     Parameters
@@ -50,7 +50,7 @@ class EdgeCormorant(nn.Module):
                  cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
                  weight_init, level_gain, charge_power, basis_set,
                  charge_scale, gaussian_mask,
-                 top, input, num_mpnn_layers, activation='leakyrelu',
+                 top, input, num_mpnn_layers, num_out=1, activation='leakyrelu',
                  device=torch.device('cpu'), dtype=torch.float):
         super(EdgeCormorant, self).__init__()
 
@@ -138,10 +138,10 @@ class EdgeCormorant(nn.Module):
         num_mlp_channels = np.sum(self.tau_levels_out)
 
         top = top.lower()
-        # if top == 'linear':
-        #     self.top_func = OutputLinear(num_scalars, bias=True, device=self.device, dtype=self.dtype)
+        if top == 'linear':
+            self.top_func = OutputEdgeLinear(num_mlp_channels, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
         if top == 'mlp':
-            self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=1, activation=activation, device=self.device, dtype=self.dtype)
+            self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=num_out, activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of top of network! {}'.format(top))
 
