@@ -208,6 +208,23 @@ class TrainCormorant:
 
         return targets
 
+    def _get_target_nonzero(self, data, stats=None):
+        """
+        Get the learning target.
+        If a stats dictionary is included, return a normalized learning target.
+        """
+        targets = data[self.args.target].to(self.device, self.dtype)
+
+        nonzero = targets.nonzero()
+
+        targets = targets[nonzero]
+
+        if stats is not None:
+            mu, sigma = stats[self.args.target]
+            targets = (targets - mu) / sigma
+
+        return targets, nonzero
+
     def train_epoch(self):
         dataloader = self.dataloaders['train']
 
@@ -224,11 +241,13 @@ class TrainCormorant:
             self.optimizer.zero_grad()
 
             # Get targets and predictions
-            targets = self._get_target(data, self.stats)
+            targets, nonzero = self._get_target_nonzero(data, self.stats)
             predict = self.model(data)
 
+            predict = predict[nonzero]
+
             # Calculate loss and backprop
-            loss = self.loss_fn(predict, targets, reduction='sum') / len(targets.nonzero())
+            loss = self.loss_fn(predict, targets)
             loss.backward()
 
             # Step optimizer and learning rate
