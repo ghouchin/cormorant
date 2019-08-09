@@ -1,12 +1,18 @@
+.ipynb_checkpoints/
 /predict/
 /model/
 /log/
-.ipynb_checkpoints/
 /old/
 /out/
 /data/
 TODO.txt
 /scratch/
+/examples/predict/
+/examples/model/
+/examples/log/
+/examples/old/
+/examples/out/
+/examples/data/
 
 *.egg-info/
 __pycache__/

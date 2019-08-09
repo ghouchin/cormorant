@@ -226,10 +226,13 @@ class TrainCormorant:
             # Get targets and predictions
             targets = self._get_target(data, self.stats)
             predict = self.model(data)
+            print('predict sahpe', predict.shape)
+            print('targets sahpe', targets.shape)
 
             # Calculate loss and backprop
             loss = self.loss_fn(predict, targets)
             loss.backward()
+            print('loss sahpe', loss.shape)
 
             # Step optimizer and learning rate
             self.optimizer.step()
