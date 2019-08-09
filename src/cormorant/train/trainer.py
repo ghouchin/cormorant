@@ -214,7 +214,7 @@ class TrainCormorant:
         targets = data[self.args.target].to(self.device, self.dtype)
 
         nonzero = targets.nonzero()
-
+        nonzero = nonzero.split(1, dim=1)  # Split into valid indices.
         targets = targets[nonzero]
 
         if stats is not None:
