@@ -109,6 +109,6 @@ class KaggleTrainDataset(Dataset):
             values = temp_data[jj_str+'_value']
 
             jj_values = coo_matrix((values, (rows, cols)), shape=(num_atoms, num_atoms)).todense()
-            data[jj_str] = torch.from_numpy(jj_values)
+            data[jj_str] = torch.from_numpy(jj_values).unsqueeze(-1)
 
         return data
