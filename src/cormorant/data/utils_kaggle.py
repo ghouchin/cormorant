@@ -9,7 +9,7 @@ from cormorant.data.dataset_kaggle import KaggleTrainDataset
 from cormorant.data.prepare import prepare_dataset
 
 def init_nmr_kaggle_dataset(args, datadir):
-    data = np.load(datadir + 'champs-scalar-coupling/' + 'targets_train.npz')
+    data = np.load(datadir + 'champs-scalar-coupling/' + 'targets_train.npz', allow_pickle=True)
     data = {key: val for key, val in data.items()}
 
     num_data = len(data['charges'])
