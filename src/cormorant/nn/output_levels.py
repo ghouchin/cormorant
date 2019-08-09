@@ -134,7 +134,7 @@ class OutputEdgeLinear(nn.Module):
         super(OutputEdgeLinear, self).__init__()
 
         self.num_channels_in = num_channels_in
-        self.lin = nn.Linear(2 * num_channels_in, num_out, bias=bias)
+        self.lin = nn.Linear(2 * num_channels_in, num_out, bias=bias).to(device=device, dtype=dtype)
         self.zero = torch.tensor(0, device=device, dtype=dtype)
 
     def forward(self, edge_scalars, edge_mask):
