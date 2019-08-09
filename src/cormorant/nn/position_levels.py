@@ -94,7 +94,8 @@ class RadPolyTrig(nn.Module):
         s = norms.shape
 
         # Mask and reshape
-        edge_mask = (edge_mask * (norms > 0)).unsqueeze(-1)
+        positive_norms = (norms > 0).byte()
+        edge_mask = (edge_mask * positive_norms).unsqueeze(-1)
         norms = norms.unsqueeze(-1)
 
         # Get inverse powers
