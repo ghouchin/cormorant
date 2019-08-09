@@ -1,18 +1,18 @@
 import torch
-from torch.utils.data import DataLoader
-import torch.optim as optim
-import torch.optim.lr_scheduler as sched
-
-import argparse, os, sys, pickle
+# from torch.utils.data import DataLoader
+# import torch.optim as optim
+# import torch.optim.lr_scheduler as sched
+import logging
+import os
 from datetime import datetime
-from math import sqrt, inf, log, log2, exp, ceil
+from math import sqrt, inf, ceil
 
 MAE = torch.nn.L1Loss()
 MSE = torch.nn.MSELoss()
-RMSE = lambda x, y : sqrt(MSE(x, y))
+RMSE = lambda x, y: sqrt(MSE(x, y))
 
-import logging
 logger = logging.getLogger(__name__)
+
 
 class TrainCormorant:
     """
@@ -40,7 +40,8 @@ class TrainCormorant:
         self.dtype = dtype
 
     def _save_checkpoint(self, valid_mae):
-        if not self.args.save: return
+        if not self.args.save:
+            return
 
         save_dict = {'args': self.args,
                      'model_state': self.model.state_dict(),
@@ -122,9 +123,7 @@ class TrainCormorant:
                 predict, targets = self.predict(split)
                 self.log_predict(predict, targets, split, description='Best')
 
-
         logging.info('Inference phase complete!')
-
 
     def _warm_restart(self, epoch):
         restart_epochs = self.restart_epochs
@@ -166,7 +165,6 @@ class TrainCormorant:
         if self.summarize:
             self.summarize.add_scalar('train/mae', sqrt(mini_batch_loss), self.minibatch)
 
-
     def _step_lr_batch(self):
         if self.args.lr_minibatch:
             self.scheduler.step()
@@ -179,7 +177,7 @@ class TrainCormorant:
         epoch0 = self.epoch
         for epoch in range(epoch0, self.args.num_epoch):
             self.epoch = epoch
-            epoch_time = datetime.now()
+            # epoch_time = datetime.now()
             logging.info('Starting Epoch: {}'.format(epoch+1))
 
             self._warm_restart(epoch)
@@ -211,7 +209,8 @@ class TrainCormorant:
     def train_epoch(self):
         dataloader = self.dataloaders['train']
 
-        current_idx, num_data_pts = 0, len(dataloader.dataset)
+        # current_idx = 0
+        # num_data_pts = len(dataloader.dataset)
         self.mae, self.rmse, self.batch_time = 0, 0, 0
         all_predict, all_targets = [], []
 
@@ -226,13 +225,10 @@ class TrainCormorant:
             # Get targets and predictions
             targets = self._get_target(data, self.stats)
             predict = self.model(data)
-            print('predict sahpe', predict.shape)
-            print('targets sahpe', targets.shape)
 
             # Calculate loss and backprop
             loss = self.loss_fn(predict, targets)
             loss.backward()
-            print('loss sahpe', loss.shape)
 
             # Step optimizer and learning rate
             self.optimizer.step()
