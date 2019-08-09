@@ -9,7 +9,7 @@ from cormorant.tests import cormorant_tests
 from cormorant.train import TrainCormorant
 from cormorant.train import init_argparse, init_file_paths, init_logger, init_cuda
 from cormorant.train import init_optimizer, init_scheduler
-from cormorant.data.utils import initialize_datasets
+from cormorant.data.utils_kaggle import init_nmr_kaggle_dataset
 from cormorant.cg_lib import global_cg_dict
 
 from cormorant.data.collate import collate_fn
@@ -38,16 +38,15 @@ def main():
     global_cg_dict(maxl=max(args.maxl+args.max_sh), dtype=dtype, device=device)
 
     # Initialize dataloder
-    args, datasets, num_species, charge_scale = initialize_datasets(args, args.datadir, args.dataset, subset=args.subset,
-                                                                    force_download=args.force_download, subtract_thermo=args.subtract_thermo
-                                                                    )
+
+    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir)
 
     # Construct PyTorch dataloaders from datasets
     dataloaders = {split: DataLoader(dataset,
                                      batch_size=args.batch_size,
                                      shuffle=args.shuffle if (split == 'train') else False,
                                      num_workers=args.num_workers,
-                                     collate_fn=collate_fn)
+                                     collate_fn=lambda x : collate_fn(x, ['jj_1', 'jj_2', 'jj_3']))
                    for split, dataset in datasets.items()}
 
     # Initialize model
