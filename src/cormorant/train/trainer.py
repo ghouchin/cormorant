@@ -179,6 +179,7 @@ class TrainCormorant:
             self.epoch = epoch
             # epoch_time = datetime.now()
             logging.info('Starting Epoch: {}'.format(epoch+1))
+            logging.info('Epoch, Batch, Root Loss, MAE, RMSE, dtbatch, epochh time, collate time')
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
