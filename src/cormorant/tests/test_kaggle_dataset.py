@@ -41,6 +41,6 @@ test_datasets['train'][50]
 
 batch = [test_datasets['train'][idx] for idx in range(5)]
 
-coll = collate_fn(batch, edge_features=['jj_types', 'jj_values'])
+coll = collate_fn(batch, edge_features=['jj_1', 'jj_2', 'jj_3'])
 
 breakpoint()

@@ -47,7 +47,7 @@ def main():
                                      batch_size=args.batch_size,
                                      shuffle=args.shuffle if (split == 'train') else False,
                                      num_workers=args.num_workers,
-                                     collate_fn=collate_fn)
+                                     collate_fn=lambda x : collate_fn(x, ['jj_1', 'jj_2', 'jj_3']))
                    for split, dataset in datasets.items()}
 
     # Initialize model
