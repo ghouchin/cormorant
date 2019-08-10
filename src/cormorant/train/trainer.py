@@ -261,7 +261,6 @@ class TrainCormorant:
             self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
 
             self.minibatch += 1
-
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
@@ -277,12 +276,13 @@ class TrainCormorant:
 
         for batch_idx, data in enumerate(dataloader):
 
-            targets = self._get_target(data, self.stats)
+            targets, nonzero = self._get_target_nonzero(data, self.stats)
             predict = self.model(data).detach()
+            predict = predict[nonzero]
 
             all_targets.append(targets)
             all_predict.append(predict)
-
+        
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
