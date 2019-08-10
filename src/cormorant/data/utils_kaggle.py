@@ -10,8 +10,8 @@ from cormorant.data.prepare import prepare_dataset
 
 def init_nmr_kaggle_dataset(args, datadir):
     data = np.load(datadir + 'champs-scalar-coupling/' + 'targets_train.npz', allow_pickle=True)
-    data = {key: val for key, val in data.items()}
-
+    data = {key: val for (key, val) in data.items()}
+    
     num_data = len(data['charges'])
     num_test = int(0.1*num_data)
     num_valid = int(0.1*num_data)
@@ -19,7 +19,7 @@ def init_nmr_kaggle_dataset(args, datadir):
 
     # Generate random permutation
     np.random.seed(0)
-    data_perm = np.random.permutation(num_data)
+    data_perm = np.random.permutation(num_data)[:(num_train + num_valid + num_test)]
 
     # Now use the permutations to generate the indices of the dataset splits.
     split_train, split_valid, split_test, split_extra = np.split(data_perm, [num_train, num_train+num_valid, num_train+num_valid+num_test])
@@ -31,13 +31,13 @@ def init_nmr_kaggle_dataset(args, datadir):
     split_test = data_perm[split_test]
 
     if args.num_train > 0:
-        split_train[:args.num_train]
+        split_train = split_train[:args.num_train]
 
     if args.num_valid > 0:
-        split_train[:args.num_valid]
+        split_valid = split_valid[:args.num_valid]
 
     if args.num_test > 0:
-        split_train[:args.num_test]
+        split_test = split_test[:args.num_test]
 
     splits = {'train': split_train, 'valid': split_valid, 'test': split_test}
 
