@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 
-from cormorant.data.collate import batch_stack_general
+from cormorant.data.collate import batch_stack_general, batch_stack
 
 num_batch = 10
 max_atoms = 10
@@ -39,6 +39,9 @@ sizes = torch.randint(1,max_atoms,(num_batch,))
 
 batch = [torch.rand(1)[0] for s in sizes]
 stacked = batch_stack_general(batch)
+stacked_old = batch_stack(batch)
+
+assert (stacked == stacked_old).all()
 
 print('scalar test:')
 
@@ -52,6 +55,9 @@ sizes = torch.randint(1,max_atoms,(num_batch,))
 
 batch = [torch.rand(s,) for s in sizes]
 stacked = batch_stack_general(batch)
+stacked_old = batch_stack(batch)
+
+assert (stacked == stacked_old).all()
 
 print('scalar atom test:')
 
@@ -67,6 +73,9 @@ sizes = torch.randint(1,max_atoms,(num_batch,))
 
 batch = [torch.rand(s,3) for s in sizes]
 stacked = batch_stack_general(batch)
+stacked_old = batch_stack(batch)
+
+assert (stacked == stacked_old).all()
 
 print('vector atom test:')
 
@@ -82,6 +91,9 @@ sizes = torch.randint(1,max_atoms,(num_batch,))
 
 batch = [torch.rand(s,s) for s in sizes]
 stacked = batch_stack_general(batch)
+stacked_old = batch_stack(batch, edge_mat=True)
+
+assert (stacked == stacked_old).all()
 
 print('matrix atom scalar test:')
 
@@ -97,6 +109,9 @@ sizes = torch.randint(1,max_atoms,(num_batch,))
 
 batch = [torch.rand(s,s,3) for s in sizes]
 stacked = batch_stack_general(batch)
+stacked_old = batch_stack(batch, edge_mat=True)
+
+assert (stacked == stacked_old).all()
 
 print('matrix atom vector test:')
 
