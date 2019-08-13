@@ -9,7 +9,7 @@ from cormorant.cg_lib import SphericalHarmonicsRel
 from cormorant.models.cormorant_levels import CormorantAtomLevel, CormorantEdgeLevel
 
 from cormorant.nn import RadialFilters
-from cormorant.nn import InputLinear, InputMPNN, InputMPNN_old
+from cormorant.nn import InputLinear, InputMPNN
 from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalars
 from cormorant.nn import scalar_mult_rep
 from cormorant.models.cormorant import expand_var_list
@@ -100,8 +100,6 @@ class EdgeCormorant(nn.Module):
             self.input_func = InputLinear(num_scalars_in, num_scalars_out, device=self.device, dtype=self.dtype)
         elif input == 'mpnn':
             self.input_func = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers, soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0], activation=activation, device=self.device, dtype=self.dtype)
-        elif input == 'mpnnold':
-            self.input_func = InputMPNN_old(num_scalars_in, num_scalars_out, num_mpnn_layers, soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0], activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of input featurization of network! {}'.format(input))
 
