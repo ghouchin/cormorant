@@ -282,7 +282,7 @@ class TrainCormorant:
 
             all_targets.append(targets)
             all_predict.append(predict)
-        
+
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
@@ -298,14 +298,16 @@ class TrainCormorant:
         mae = MAE(predict, targets)
         rmse = RMSE(predict, targets)
 
+        mae_units = mae * self.stats[self.args.target][1]
+
         datastrings = {'train': 'Training', 'test': 'Testing', 'valid': 'Validation'}
 
         if epoch >= 0:
             suffix = 'final'
-            logging.info('Epoch: {} Complete! {} {} Loss: {:10.4f} {:10.4f}'.format(epoch+1, description, datastrings[dataset], mae, rmse))
+            logging.info('Epoch: {} Complete! {} {} Loss: {:10.4f} {:10.4f} {:10.4f}'.format(epoch+1, description, datastrings[dataset], mae_units, mae, rmse))
         else:
             suffix = 'best'
-            logging.info('Training Complete! {} {} Loss: {:10.4f} {:10.4f}'.format(description, datastrings[dataset], mae, rmse))
+            logging.info('Training Complete! {} {} Loss: {:10.4f} {:10.4f} {:10.4f}'.format(description, datastrings[dataset], mae_units, mae, rmse))
 
         if self.args.predict:
             file = self.args.predictfile + '.' + suffix + '.' + dataset + '.pt'
