@@ -12,8 +12,10 @@ TODO.txt
 /examples/log/
 /examples/old/
 /examples/out/
+/examples/output/
 /examples/data/
 /examples/*.sh
+/examples/*.sbatch
 
 *.egg-info/
 __pycache__/

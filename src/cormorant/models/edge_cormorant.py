@@ -130,11 +130,9 @@ class EdgeCormorant(nn.Module):
         self.atom_levels = atom_levels
         self.edge_levels = edge_levels
 
-        self.tau_levels_all = [level.taus for level in atom_levels]
-        self.tau_levels_out = [level.tau_out for level in atom_levels]
-        self.tau_levels_out = [level.tau_out for level in atom_levels]
-        num_mlp_channels = np.sum(self.tau_levels_out)
-
+        self.tau_levels_out = [level.tau_out for level in edge_levels]
+        num_mlp_channels = sum([sum(level) for level in self.tau_levels_out])
+        print(num_mlp_channels)
         top = top.lower()
         if top == 'linear':
             self.top_func = OutputEdgeLinear(num_mlp_channels, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
