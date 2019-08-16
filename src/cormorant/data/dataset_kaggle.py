@@ -1,14 +1,10 @@
-import torch
-from torch.utils.data import Dataset
-
 import numpy as np
+import torch
+import logging
+
+from torch.utils.data import Dataset
 from scipy.sparse import coo_matrix
 
-import os
-from itertools import islice
-from math import inf
-
-import logging
 
 class KaggleTrainDataset(Dataset):
     """
@@ -41,11 +37,11 @@ class KaggleTrainDataset(Dataset):
 
         # Fix by hand for dataset
         included_species = torch.tensor([1, 6, 7, 8, 9])
-
         self.included_species = included_species
-
         self.num_species = len(included_species)
         self.max_charge = max(included_species)
+
+        self.coupling_subtypes = ["1JHC", "1JHN", "2JHH", "2JHC", "2JHN", "3JHH", "3JHC", "3JHN"]
 
         self.parameters = {'num_species': self.num_species, 'max_charge': self.max_charge}
 
@@ -56,7 +52,6 @@ class KaggleTrainDataset(Dataset):
         self.stats = {}
         self._calc_jj_stats()
 
-
         if shuffle:
             self.perm = torch.randperm(len(data['charges']))[:self.num_pts]
         else:
@@ -66,25 +61,37 @@ class KaggleTrainDataset(Dataset):
         jj_splits = {}
         jj_splits.update({'jj_'+str(key)+'_edge': [] for key in [1, 2, 3]})
         jj_splits.update({'jj_'+str(key)+'_value': [] for key in [1, 2, 3]})
-        for jj_type, jj_edge, jj_value in zip(self.data['jj_type'], self.data['jj_edge'], self.data['jj_value']):
+        jj_splits.update({'jj_'+str(key)+'_label': [] for key in [1, 2, 3]})
+        for jj_type, jj_edge, jj_value, jj_label in zip(self.data['jj_type'], self.data['jj_edge'], self.data['jj_value'], self.data['jj_label']):
             for jj_t in [1, 2, 3]:
                 this_jj = (jj_type == jj_t)
 
                 jj_splits['jj_'+str(jj_t)+'_edge'].append(jj_edge[this_jj, :])
                 jj_splits['jj_'+str(jj_t)+'_value'].append(jj_value[this_jj])
+                jj_splits['jj_'+str(jj_t)+'_label'].append(jj_label[this_jj])
 
         self.data.update(jj_splits)
+
+        jj_subtype_splits = {}
+        jj_subtype_splits.update({'%s_edge' % subtype_i: [] for subtype_i in self.coupling_subtypes})
+        jj_subtype_splits.update({'%s_value' % subtype_i: [] for subtype_i in self.coupling_subtypes})
+        for jj_label, jj_edge, jj_value in zip(self.data['jj_label'], self.data['jj_edge'], self.data['jj_value']):
+            for i, subtype_i in enumerate(self.coupling_subtypes):
+                this_subtype = (jj_label == subtype_i)
+                jj_subtype_splits["%s_edge" % subtype_i].append(jj_edge[this_subtype, :])
+                jj_subtype_splits["%s_value" % subtype_i].append(jj_value[this_subtype])
+        self.data.update(jj_subtype_splits)
 
     def _calc_jj_stats(self):
 
         for jj_target, jj_split in self.data.items():
-
-            if not jj_target in ['jj_1_value', 'jj_2_value', 'jj_3_value']: continue
+            targets = ['jj_%d_value' % i for i in range(1, 4)]
+            targets += ['%s_value' % label_i for label_i in self.coupling_subtypes]
+            if jj_target not in targets:
+                continue
 
             jj_values_cat = np.concatenate(jj_split)
-
-            self.stats[jj_target[:4]] = (jj_values_cat.mean(), jj_values_cat.std())
-
+            self.stats[jj_target[:-6]] = (jj_values_cat.mean(), jj_values_cat.std())
 
     def __len__(self):
         return self.num_pts
@@ -110,5 +117,12 @@ class KaggleTrainDataset(Dataset):
 
             jj_values = coo_matrix((values, (rows, cols)), shape=(num_atoms, num_atoms)).todense()
             data[jj_str] = torch.from_numpy(jj_values).unsqueeze(-1)
+
+        for subtype_label in self.coupling_subtypes:
+            rows, cols = temp_data[subtype_label+'_edge'][:, 0], temp_data[subtype_label+'_edge'][:, 1]
+            values = temp_data[subtype_label+'_value']
+
+            jj_values = coo_matrix((values, (rows, cols)), shape=(num_atoms, num_atoms)).todense()
+            data[subtype_label] = torch.from_numpy(jj_values).unsqueeze(-1)
 
         return data
