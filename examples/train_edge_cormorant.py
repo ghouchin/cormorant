@@ -40,13 +40,14 @@ def main():
     # Initialize dataloder
 
     args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir)
+    edge_features = ['jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
 
     # Construct PyTorch dataloaders from datasets
     dataloaders = {split: DataLoader(dataset,
                                      batch_size=args.batch_size,
                                      shuffle=args.shuffle if (split == 'train') else False,
                                      num_workers=args.num_workers,
-                                     collate_fn=lambda x : collate_fn(x, ['jj_1', 'jj_2', 'jj_3']))
+                                     collate_fn=lambda x : collate_fn(x, edge_features))
                    for split, dataset in datasets.items()}
 
     # Initialize model
