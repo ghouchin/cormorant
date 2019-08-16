@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from cormorant.data.dataset_kaggle import KaggleTrainDataset
 from cormorant.data.prepare import prepare_dataset
 
-def init_nmr_kaggle_dataset(args, datadir):
+def init_nmr_kaggle_dataset(args, datadir, trim=False):
     data = np.load(datadir + 'champs-scalar-coupling/' + 'targets_train.npz', allow_pickle=True)
     data = {key: val for (key, val) in data.items()}
     
@@ -48,6 +48,10 @@ def init_nmr_kaggle_dataset(args, datadir):
             data_splits[split_name][key] = val[split_idxs]
 
     datasets = {split: KaggleTrainDataset(data) for split, data in data_splits.items()}
+    
+    if trim:
+        datasets = {split: trim_dataset(args.target, dataset) for split, dataset in datasets.items()}
+
 
     # Now, update the number of training/test/validation sets in args
     args.num_train = datasets['train'].num_pts
@@ -59,3 +63,32 @@ def init_nmr_kaggle_dataset(args, datadir):
     max_charge = datasets['train'].max_charge
 
     return args, datasets, num_species, max_charge
+
+
+def trim_dataset(target, dataset):
+    """
+    Removes entries from the dataset that do not have values for the target.
+    Note that this changes the dataset in place.
+
+    Parameters
+    ----------
+    target : str
+        Name of the target being optimized for
+    dataset : KaggleTrainDataset object
+        Dataset to be trimmed
+
+    Returns
+    -------
+    data : KaggleTrainDataset
+        Trimmed dataset.
+    """
+    target_column = dataset.data[target + "_value"]
+    nonempty_locs = np.where(np.array([len(val) for val in target_column]) > 0)[0]
+
+    for key, attrib in dataset.data.items():
+        print(key)
+        print(type(attrib))
+        print(type(nonempty_locs))
+        new_attrib = attrib[nonempty_locs]
+        dataset.data[key] = new_attrib
+    return dataset
