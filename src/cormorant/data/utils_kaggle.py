@@ -86,9 +86,7 @@ def trim_dataset(target, dataset):
     nonempty_locs = np.where(np.array([len(val) for val in target_column]) > 0)[0]
 
     for key, attrib in dataset.data.items():
-        print(key)
-        print(type(attrib))
-        print(type(nonempty_locs))
         new_attrib = attrib[nonempty_locs]
         dataset.data[key] = new_attrib
+    dataset.num_pts = len(nonempty_locs)
     return dataset
