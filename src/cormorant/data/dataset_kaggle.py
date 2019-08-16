@@ -42,6 +42,8 @@ class KaggleTrainDataset(Dataset):
         self.max_charge = max(included_species)
 
         self.coupling_subtypes = ["1JHC", "1JHN", "2JHH", "2JHC", "2JHN", "3JHH", "3JHC", "3JHN"]
+        self.valid_labels = ['jj_%d_value' % i for i in range(1, 4)]
+        self.valid_labels += ['%s_value' % label_i for label_i in self.coupling_subtypes]
 
         self.parameters = {'num_species': self.num_species, 'max_charge': self.max_charge}
 
@@ -82,12 +84,19 @@ class KaggleTrainDataset(Dataset):
                 jj_subtype_splits["%s_value" % subtype_i].append(jj_value[this_subtype])
         self.data.update(jj_subtype_splits)
 
-    def _calc_jj_stats(self):
+        for prefix in ["jj_1", "jj_2", "jj_3"]:
+            for suffix in ['_edge', '_value', '_label']:
+                key = prefix + suffix
+                self.data[key] = np.array(self.data[key])
 
+        for prefix in self.coupling_subtypes:
+            for suffix in ['_edge', '_value']:
+                key = prefix + suffix
+                self.data[key] = np.array(self.data[key])
+    
+    def _calc_jj_stats(self):
         for jj_target, jj_split in self.data.items():
-            targets = ['jj_%d_value' % i for i in range(1, 4)]
-            targets += ['%s_value' % label_i for label_i in self.coupling_subtypes]
-            if jj_target not in targets:
+            if jj_target not in self.valid_labels:
                 continue
 
             jj_values_cat = np.concatenate(jj_split)
