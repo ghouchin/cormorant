@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from cormorant.data.dataset_kaggle import KaggleTrainDataset
 from cormorant.data.prepare import prepare_dataset
 
-def init_nmr_kaggle_dataset(args, datadir, trim=False):
+def init_nmr_kaggle_dataset(args, datadir, trim=True):
     data = np.load(datadir + 'champs-scalar-coupling/' + 'targets_train.npz', allow_pickle=True)
     data = {key: val for (key, val) in data.items()}
     
@@ -88,5 +88,15 @@ def trim_dataset(target, dataset):
     for key, attrib in dataset.data.items():
         new_attrib = attrib[nonempty_locs]
         dataset.data[key] = new_attrib
+    print(dir(dataset))
+    print(len(dataset))
+    print('shuffle', dataset.shuffle)
+    print('perm shape', len(dataset.perm))
     dataset.num_pts = len(nonempty_locs)
+    dataset._build_perm()
+    # print(dataset.perm)
+    print('sizeof', dataset.__sizeof__())
+    print('num_pts', dataset.num_pts)
+    print('len', len(dataset))
+    print('perm shape', len(dataset.perm))
     return dataset

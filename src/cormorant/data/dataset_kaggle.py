@@ -5,7 +5,6 @@ import logging
 from torch.utils.data import Dataset
 from scipy.sparse import coo_matrix
 
-
 class KaggleTrainDataset(Dataset):
     """
     Data structure for a "Predicting Molecular Properties" dataset.  Extends PyTorch Dataset.
@@ -53,11 +52,23 @@ class KaggleTrainDataset(Dataset):
         # so we won't automatically calculate the rest of the statistics.
         self.stats = {}
         self._calc_jj_stats()
+        self.shuffle = shuffle
+        self._build_perm()
 
-        if shuffle:
-            self.perm = torch.randperm(len(data['charges']))[:self.num_pts]
+    def _build_perm(self):
+        """
+        Builds a permutation of the indices, which is stored in self.perm
+
+        Parameters
+        ----------
+        shuffle : bool
+            If True, sets self.perm to a permutation matrix.  If not, to None.
+        """
+        if self.shuffle:
+            self.perm = torch.randperm(len(self.data['charges']))[:self.num_pts]
         else:
             self.perm = None
+
 
     def _split_jj_couplings(self):
         jj_splits = {}
