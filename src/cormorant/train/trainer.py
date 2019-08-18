@@ -5,7 +5,7 @@ import torch
 import logging
 import os
 from datetime import datetime
-from math import sqrt, inf, ceil
+from math import sqrt, inf, ceil, log
 
 MAE = torch.nn.L1Loss()
 MSE = torch.nn.MSELoss()
@@ -304,10 +304,10 @@ class TrainCormorant:
 
         if epoch >= 0:
             suffix = 'final'
-            logging.info('Epoch: {} Complete! {} {} Loss: {:10.4f} {:10.4f} {:10.4f}'.format(epoch+1, description, datastrings[dataset], mae_units, mae, rmse))
+            logging.info('Epoch: {} Complete! {} {} Loss: {:10.4f} {:10.4f} {:10.4f} {:10.4f}'.format(epoch+1, description, datastrings[dataset], log(mae_units), mae_units, mae, rmse))
         else:
             suffix = 'best'
-            logging.info('Training Complete! {} {} Loss: {:10.4f} {:10.4f} {:10.4f}'.format(description, datastrings[dataset], mae_units, mae, rmse))
+            logging.info('Training Complete! {} {} Loss: {:10.4f} {:10.4f} {:10.4f} {:10.4f}'.format(description, datastrings[dataset], log(mae_units), mae_units, mae, rmse))
 
         if self.args.predict:
             file = self.args.predictfile + '.' + suffix + '.' + dataset + '.pt'
