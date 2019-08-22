@@ -21,7 +21,7 @@ class KaggleTrainDataset(Dataset):
         If true, shuffle the points in the dataset.
     """
     # TODO: Rewrite with a better format and using torch.tensors() instead of np.arrays()
-    def __init__(self, data, num_pts=-1, normalize=True, shuffle=True, subtract_thermo=True):
+    def __init__(self, data, num_pts=-1, normalize=True, shuffle=True, subtract_thermo=True, additional_atom_features=None):
 
         self.data = data
 
@@ -39,6 +39,10 @@ class KaggleTrainDataset(Dataset):
         self.included_species = included_species
         self.num_species = len(included_species)
         self.max_charge = max(included_species)
+        if additional_atom_features is None:
+            self.additional_atom_features = []
+        else:
+            self.additional_atom_features = list(additional_atom_features)
 
         self.coupling_subtypes = ["1JHC", "1JHN", "2JHH", "2JHC", "2JHN", "3JHH", "3JHC", "3JHN"]
         self.valid_labels = ['jj_%d_value' % i for i in range(1, 4)]
@@ -121,8 +125,9 @@ class KaggleTrainDataset(Dataset):
             idx = self.perm[idx]
 
         temp_data = {key: val[idx] for key, val in self.data.items()}
-
-        data = {key: torch.from_numpy(temp_data[key]) for key in ['charges', 'positions']}
+        
+        atom_features = ['charges', 'positions'] + self.additional_atom_features
+        data = {key: torch.from_numpy(temp_data[key]) for key in atom_features}
 
         data['one_hot'] = torch.from_numpy(temp_data['charges']).unsqueeze(-1) == self.included_species.unsqueeze(0)
 

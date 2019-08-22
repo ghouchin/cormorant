@@ -38,8 +38,9 @@ def main():
     global_cg_dict(maxl=max(args.maxl+args.max_sh), dtype=dtype, device=device)
 
     # Initialize dataloder
+    additional_atom_features = ['Estate', 'is_aromatic', 'hybridizations', 'G_charges']
 
-    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir)
+    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
     edge_features = ['jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
 
     # Construct PyTorch dataloaders from datasets
@@ -52,11 +53,13 @@ def main():
 
     # Initialize model
     model = EdgeCormorant(args.num_cg_levels, args.maxl, args.max_sh, args.num_channels, num_species,
-                           args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
-                           args.weight_init, args.level_gain, args.charge_power, args.basis_set,
-                           charge_scale, args.gaussian_mask,
-                           args.top, args.input, args.num_mpnn_levels,
-                           device=device, dtype=dtype)
+                          args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
+                          args.weight_init, args.level_gain, args.charge_power, args.basis_set,
+                          charge_scale, args.gaussian_mask,
+                          args.top, args.input, args.num_mpnn_levels, args.num_top_levels,
+                          activation=args.top_activation,
+                          additional_atom_features=additional_atom_features, num_scalars_in=23,
+                          device=device, dtype=dtype)
 
     # Initialize the scheduler and optimizer
     optimizer = init_optimizer(args, model)

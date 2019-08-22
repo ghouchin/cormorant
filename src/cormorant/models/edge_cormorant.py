@@ -49,8 +49,9 @@ class EdgeCormorant(nn.Module):
     def __init__(self, num_cg_levels, maxl, max_sh, num_channels, num_species,
                  cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
                  weight_init, level_gain, charge_power, basis_set,
-                 charge_scale, gaussian_mask,
-                 top, input, num_mpnn_layers, num_out=1, activation='leakyrelu',
+                 charge_scale, gaussian_mask, top, input, num_mpnn_layers, 
+                 num_top_layers, num_scalars_in=None, num_out=1, activation='leakyrelu',
+                 additional_atom_features=None,
                  device=torch.device('cpu'), dtype=torch.float):
         super(EdgeCormorant, self).__init__()
 
@@ -78,6 +79,11 @@ class EdgeCormorant(nn.Module):
         self.charge_scale = charge_scale
         self.num_species = num_species
 
+        if additional_atom_features is None:
+            self.additional_atom_features = []
+        else:
+            self.additional_atom_features = list(additional_atom_features)
+
         logging.info('hard_cut_rad: {}'.format(hard_cut_rad))
         logging.info('soft_cut_rad: {}'.format(soft_cut_rad))
         logging.info('soft_cut_width: {}'.format(soft_cut_width))
@@ -91,8 +97,11 @@ class EdgeCormorant(nn.Module):
         # Set up position functions, now independent of spherical harmonics
         self.position_functions = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels, device=device, dtype=dtype)
         tau_pos = self.position_functions.tau
-
-        num_scalars_in = self.num_species * (self.charge_power + 1)
+        
+        if num_scalars_in is None:
+            num_scalars_in = self.num_species * (self.charge_power + 1)
+        else:
+            num_scalars_in = num_scalars_in
         num_scalars_out = num_channels[0]
 
         input = input.lower()
@@ -137,7 +146,7 @@ class EdgeCormorant(nn.Module):
         if top == 'linear':
             self.top_func = OutputEdgeLinear(num_mlp_channels, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
         elif top == 'mlp':
-            self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=num_out, activation=activation, device=self.device, dtype=self.dtype)
+            self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=num_out, num_hidden=num_top_layers, activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of top of network! {}'.format(top))
 
@@ -162,12 +171,15 @@ class EdgeCormorant(nn.Module):
 
         """
         input_scalars, atom_mask, atom_positions, edge_mask = self.prepare_input(data)
+        print('input shape', input_scalars.shape)
 
         spherical_harmonics, norms = self.spherical_harmonics_rel(atom_positions, atom_positions)
         positive_norms = (norms > 0).byte()
         rad_func_levels = self.position_functions(norms, edge_mask * (positive_norms))
 
         atom_reps = [self.input_func(input_scalars, atom_mask, edge_mask, norms)]
+        print([atom_rep.shape for atom_rep in atom_reps])
+        print([type(atom_reps[0])])
         edge_net = [torch.tensor([]).to(self.device, self.dtype)]
 
         # Construct iterated multipoles
@@ -226,5 +238,25 @@ class EdgeCormorant(nn.Module):
         charge_tensor = (charges.unsqueeze(-1)/charge_scale).pow(torch.arange(charge_power+1., device=device, dtype=dtype))
         charge_tensor = charge_tensor.view(charges.shape + (1, charge_power+1))
         scalars = (one_hot.unsqueeze(-1) * charge_tensor).view(charges.shape[:2] + (-1,))
+        scalars = self._add_additional_features(scalars, data)
 
         return scalars, atom_mask, atom_positions, edge_mask
+
+    def _add_additional_features(self, scalars, data):
+        device, dtype = self.device, self.dtype
+        if len(self.additional_atom_features) > 0:
+            scalar_list = [scalars]
+            if 'is_aromatic' in self.additional_atom_features:
+                is_aromatic_data = data['is_aromatic'].to(device, dtype)
+                scalar_list.append(is_aromatic_data.unsqueeze(-1))
+            if 'Estate' in self.additional_atom_features:
+                estate_data = data['Estate'].to(device, dtype)
+                scalar_list.append(estate_data.unsqueeze(-1))
+            if 'G_charges' in self.additional_atom_features:
+                g_charge_data = data['G_charges'].to(device, dtype)
+                scalar_list.append(g_charge_data.unsqueeze(-1))
+            if 'hybridizations' in self.additional_atom_features:
+                hybridizations_data = data['hybridizations'].to(device, dtype)
+                scalar_list.append(hybridizations_data)
+            scalars = torch.cat(scalar_list, dim=2)
+        return scalars
