@@ -59,31 +59,38 @@ class TrainCormorant:
         logging.info('Saving to checkpoint file: {}'.format(self.args.checkfile))
         torch.save(save_dict, self.args.checkfile)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, load_training_state=True):
         """
         Load checkpoint from previous file.
+
+        Parameters
+        ----------
+        load_training_state : bool
+            If true, load the training state as well.  
+            Else, begins the training from scratch.
         """
         if not self.args.load:
             return
         elif os.path.exists(self.args.checkfile):
             logging.info('Loading previous model from checkpoint!')
-            self.load_state(self.args.checkfile)
+            self.load_state(self.args.checkfile, load_training_state)
         else:
             logging.info('No checkpoint included! Starting fresh training program.')
             return
 
-    def load_state(self, checkfile):
+    def load_state(self, checkfile, load_training_state=True):
         logging.info('Loading from checkpoint!')
 
         checkpoint = torch.load(checkfile)
         self.model.load_state_dict(checkpoint['model_state'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state'])
-        self.scheduler.load_state_dict(checkpoint['scheduler_state'])
-        self.epoch = checkpoint['epoch']
-        self.best_loss = checkpoint['best_loss']
-        self.minibatch = checkpoint['minibatch']
+        if load_training_state:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state'])
+            self.scheduler.load_state_dict(checkpoint['scheduler_state'])
+            self.epoch = checkpoint['epoch']
+            self.best_loss = checkpoint['best_loss']
+            self.minibatch = checkpoint['minibatch']
 
-        logging.info('Best loss from checkpoint: {} at epoch {}'.format(self.best_loss, self.epoch))
+            logging.info('Best loss from checkpoint: {} at epoch {}'.format(self.best_loss, self.epoch))
 
     def evaluate(self, splits=['train', 'valid', 'test'], best=True, final=True):
         """

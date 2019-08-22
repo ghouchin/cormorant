@@ -127,6 +127,8 @@ def get_activation_fn(activation):
         activation_fn = nn.ELU()
     elif activation == 'sigmoid':
         activation_fn = nn.Sigmoid()
+    elif activation == 'tanh':
+        activation_fn = nn.Tanh()
     else:
         raise ValueError('Activation function {} not implemented!'.format(activation))
     return activation_fn
