@@ -38,7 +38,9 @@ def main():
     global_cg_dict(maxl=max(args.maxl+args.max_sh), dtype=dtype, device=device)
 
     # Initialize dataloder
-    additional_atom_features = ['Estate', 'is_aromatic', 'hybridizations', 'G_charges']
+    # additional_atom_features = ['G_charges']
+    additional_atom_features = ['partial_qs']
+    # additional_atom_features = None
 
     args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
     edge_features = ['jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
@@ -58,7 +60,7 @@ def main():
                           charge_scale, args.gaussian_mask,
                           args.top, args.input, args.num_mpnn_levels, args.num_top_levels,
                           activation=args.top_activation,
-                          additional_atom_features=additional_atom_features, num_scalars_in=23,
+                          additional_atom_features=additional_atom_features, num_scalars_in=16,
                           device=device, dtype=dtype)
 
     # Initialize the scheduler and optimizer

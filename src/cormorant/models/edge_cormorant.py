@@ -141,7 +141,6 @@ class EdgeCormorant(nn.Module):
 
         self.tau_levels_out = [level.tau_out for level in edge_levels]
         num_mlp_channels = sum([sum(level) for level in self.tau_levels_out])
-        print(num_mlp_channels)
         top = top.lower()
         if top == 'linear':
             self.top_func = OutputEdgeLinear(num_mlp_channels, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
@@ -171,15 +170,12 @@ class EdgeCormorant(nn.Module):
 
         """
         input_scalars, atom_mask, atom_positions, edge_mask = self.prepare_input(data)
-        print('input shape', input_scalars.shape)
 
         spherical_harmonics, norms = self.spherical_harmonics_rel(atom_positions, atom_positions)
         positive_norms = (norms > 0).byte()
         rad_func_levels = self.position_functions(norms, edge_mask * (positive_norms))
 
         atom_reps = [self.input_func(input_scalars, atom_mask, edge_mask, norms)]
-        print([atom_rep.shape for atom_rep in atom_reps])
-        print([type(atom_reps[0])])
         edge_net = [torch.tensor([]).to(self.device, self.dtype)]
 
         # Construct iterated multipoles
@@ -254,6 +250,9 @@ class EdgeCormorant(nn.Module):
                 scalar_list.append(estate_data.unsqueeze(-1))
             if 'G_charges' in self.additional_atom_features:
                 g_charge_data = data['G_charges'].to(device, dtype)
+                scalar_list.append(g_charge_data.unsqueeze(-1))
+            if 'partial_qs' in self.additional_atom_features:
+                g_charge_data = data['partial_qs'].to(device, dtype)
                 scalar_list.append(g_charge_data.unsqueeze(-1))
             if 'hybridizations' in self.additional_atom_features:
                 hybridizations_data = data['hybridizations'].to(device, dtype)

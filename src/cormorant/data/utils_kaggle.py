@@ -89,15 +89,7 @@ def trim_dataset(target, dataset):
     for key, attrib in dataset.data.items():
         new_attrib = attrib[nonempty_locs]
         dataset.data[key] = new_attrib
-    print(dir(dataset))
-    print(len(dataset))
-    print('shuffle', dataset.shuffle)
-    print('perm shape', len(dataset.perm))
     dataset.num_pts = len(nonempty_locs)
     dataset._build_perm()
     # print(dataset.perm)
-    print('sizeof', dataset.__sizeof__())
-    print('num_pts', dataset.num_pts)
-    print('len', len(dataset))
-    print('perm shape', len(dataset.perm))
     return dataset
