@@ -108,6 +108,18 @@ class KaggleTrainDataset(Dataset):
             for suffix in ['_edge', '_value']:
                 key = prefix + suffix
                 self.data[key] = np.array(self.data[key])
+
+        jj_all_splits.update({'jj_all_edge': []})
+        jj_all_splits.update({'jj_all_value': []})
+        for jj_edge, jj_value, jj_label in zip(self.data['jj_edge'], self.data['jj_value'], self.data['jj_label']):
+            jj_all_splits["jj_all_edge"].append(jj_edge)
+            jj_all_splits["jj_all_value"].append(jj_value)
+            jj_all_splits["jj_all_label"].append(jj_label)
+
+        for suffix in ['_edge', '_value', '_label']:
+            key = 'jj_all' + suffix
+            self.data[key] = np.array(self.data[key])
+
     
     def _calc_jj_stats(self):
         for jj_target, jj_split in self.data.items():
@@ -133,10 +145,9 @@ class KaggleTrainDataset(Dataset):
 
         num_atoms = len(temp_data['charges'])
 
-        for jj_type in [1, 2, 3]:
+        for jj_type in [1, 2, 3, 'all']:
 
             jj_str = 'jj_'+str(jj_type)
-
             rows, cols = temp_data[jj_str+'_edge'][:, 0], temp_data[jj_str+'_edge'][:, 1]
             values = temp_data[jj_str+'_value']
 
