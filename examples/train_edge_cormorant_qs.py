@@ -6,7 +6,7 @@ import logging
 from cormorant.models import EdgeCormorant
 from cormorant.tests import cormorant_tests
 
-from cormorant.train import TrainCormorantWTensors
+from cormorant.train import TrainCormorant
 from cormorant.train import init_argparse, init_file_paths, init_logger, init_cuda
 from cormorant.train import init_optimizer, init_scheduler
 from cormorant.data.utils_kaggle import init_nmr_kaggle_dataset
@@ -56,7 +56,7 @@ def main():
                           charge_scale, args.gaussian_mask,
                           args.top, args.input, args.num_mpnn_levels, args.num_top_levels,
                           activation=args.top_activation,
-                          tensor_output=False,
+                          # tensor_output=False,
                           additional_atom_features=additional_atom_features, num_scalars_in=16,
                           device=device, dtype=dtype)
 
@@ -71,7 +71,7 @@ def main():
     cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
-    trainer = TrainCormorantWTensors(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
+    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
 
     # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
     trainer.load_checkpoint()
