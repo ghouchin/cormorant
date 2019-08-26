@@ -41,7 +41,7 @@ def main():
     additional_atom_features = ['partial_qs']
 
     args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
-    edge_features = ['jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN', 'jj_fc', 'jj_sd', 'jj_pso', 'jj_dso']
+    edge_features = ['jj_all', 'jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN', 'jj_fc', 'jj_sd', 'jj_pso', 'jj_dso']
     dataloaders = {split: DataLoader(dataset,
                                      batch_size=args.batch_size,
                                      shuffle=args.shuffle if (split == 'train') else False,

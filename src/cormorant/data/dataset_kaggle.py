@@ -45,7 +45,7 @@ class KaggleTrainDataset(Dataset):
             self.additional_atom_features = list(additional_atom_features)
 
         self.coupling_subtypes = ["1JHC", "1JHN", "2JHH", "2JHC", "2JHN", "3JHH", "3JHC", "3JHN"]
-        self.valid_labels = ['jj_%d_value' % i for i in range(1, 4)]
+        self.valid_labels = ['jj_%d_value' % i for i in range(1, 4)] + ['jj_all_value']
         self.valid_labels += ['%s_value' % label_i for label_i in self.coupling_subtypes]
 
         self.parameters = {'num_species': self.num_species, 'max_charge': self.max_charge}
@@ -108,13 +108,16 @@ class KaggleTrainDataset(Dataset):
             for suffix in ['_edge', '_value']:
                 key = prefix + suffix
                 self.data[key] = np.array(self.data[key])
-
+        
+        jj_all_splits = {}
         jj_all_splits.update({'jj_all_edge': []})
         jj_all_splits.update({'jj_all_value': []})
+        jj_all_splits.update({'jj_all_label': []})
         for jj_edge, jj_value, jj_label in zip(self.data['jj_edge'], self.data['jj_value'], self.data['jj_label']):
             jj_all_splits["jj_all_edge"].append(jj_edge)
             jj_all_splits["jj_all_value"].append(jj_value)
             jj_all_splits["jj_all_label"].append(jj_label)
+        self.data.update(jj_all_splits)
 
         for suffix in ['_edge', '_value', '_label']:
             key = 'jj_all' + suffix
