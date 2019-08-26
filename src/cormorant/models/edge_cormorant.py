@@ -254,6 +254,9 @@ class EdgeCormorant(nn.Module):
             if 'partial_qs' in self.additional_atom_features:
                 g_charge_data = data['partial_qs'].to(device, dtype)
                 scalar_list.append(g_charge_data.unsqueeze(-1))
+            if 'zeros' in self.additional_atom_features:
+                g_charge_data = data['zeros'].to(device, dtype)
+                scalar_list.append(g_charge_data.unsqueeze(-1))
             if 'hybridizations' in self.additional_atom_features:
                 hybridizations_data = data['hybridizations'].to(device, dtype)
                 scalar_list.append(hybridizations_data)
