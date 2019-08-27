@@ -5,6 +5,7 @@ import logging
 from torch.utils.data import Dataset
 from scipy.sparse import coo_matrix
 
+
 class KaggleTrainDataset(Dataset):
     """
     Data structure for a "Predicting Molecular Properties" dataset.  Extends PyTorch Dataset.

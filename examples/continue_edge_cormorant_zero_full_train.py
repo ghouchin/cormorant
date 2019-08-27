@@ -9,7 +9,7 @@ from cormorant.tests import cormorant_tests
 from cormorant.train import TrainCormorant
 from cormorant.train import init_argparse, init_file_paths, init_logger, init_cuda
 from cormorant.train import init_optimizer, init_scheduler
-from cormorant.data.utils_kaggle import init_nmr_kaggle_dataset, init_nmr_eval_kaggle_dataset
+from cormorant.data.utils_kaggle import init_nmr_kaggle_dataset
 from cormorant.cg_lib import global_cg_dict
 
 from cormorant.data.collate import collate_fn
@@ -41,16 +41,7 @@ def main():
     additional_atom_features = ['zeros']
 
     edge_features = ['jj_all', 'jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN', 'jj_fc', 'jj_sd', 'jj_pso', 'jj_dso']
-    args, old_datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
-    # print('first dataset loaded')
-    # old_data_loader = DataLoader(old_datasets['train'], batch_size=args.batch_size,
-    #                              shuffle=args.shuffle, num_workers=args.num_workers,
-    #                              collate_fn=lambda x: collate_fn(x, edge_features))
-
-    args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_test_expanded.npz', additional_atom_features=additional_atom_features)
-    # args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_train_dummy_sub.npz', additional_atom_features=additional_atom_features)
-    print('second dataset loaded')
-    # args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_train_dummy_sub.npz', additional_atom_features=additional_atom_features)
+    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features, use_all_train=True)
     dataloaders = {split: DataLoader(dataset,
                                      batch_size=args.batch_size,
                                      shuffle=args.shuffle if (split == 'train') else False,
@@ -65,10 +56,8 @@ def main():
                           charge_scale, args.gaussian_mask,
                           args.top, args.input, args.num_mpnn_levels, args.num_top_levels,
                           activation=args.top_activation,
-                          # tensor_output=False,
                           additional_atom_features=additional_atom_features, num_scalars_in=16,
                           device=device, dtype=dtype)
-    print('built model')
 
     # Initialize the scheduler and optimizer
     optimizer = init_optimizer(args, model)
@@ -78,28 +67,19 @@ def main():
     loss_fn = torch.nn.functional.mse_loss
 
     # Apply the covariance and permutation invariance tests.
-    print('starting tests')
-    # cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
-    print('finishing tests')
+    cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
-    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=old_datasets['train'].stats)
-    print('built trainer')
+    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
+
     # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
-    trainer.load_checkpoint()
-    print('loaded params')
+    trainer.load_checkpoint(load_training_state=False)
 
     # Train model.
-    # trainer.train()
+    trainer.train()
 
     # Test predictions on best model and also last checkpointed model.
-    # predictions, targets = trainer.predict(set='test')
-    trainer.evaluate(splits=['test'])
-    print('finished predictions')
-    print('finished prediction conversion')
-    # targets = targets.detach().numpy()
-    # np.save(args.predictdir + 'final_predictions.npy', predictions)
-    # np.save(args.predictdir + 'final_targets.npy', targets)
+    trainer.evaluate()
 
 
 if __name__ == '__main__':

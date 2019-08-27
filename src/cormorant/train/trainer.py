@@ -26,9 +26,11 @@ class TrainCormorant:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.restart_epochs = restart_epochs
-        
+
         if stats is None:
             self.stats = dataloaders['train'].dataset.stats
+        else:
+            self.stats = stats
 
         # TODO: Fix this until TB summarize is implemented.
         self.summarize = False
@@ -187,6 +189,9 @@ class TrainCormorant:
             self.epoch = epoch
             # epoch_time = datetime.now()
             logging.info('Starting Epoch: {}'.format(epoch+1))
+            logging.info('NUM TRAINING POINTS: {}'.format(self.dataloaders['train'].dataset.num_pts))
+            logging.info('NUM VALIDATION POINTS: {}'.format(self.dataloaders['valid'].dataset.num_pts))
+            logging.info('NUM TESTING POINTS: {}'.format(self.dataloaders['test'].dataset.num_pts))
             logging.info('Epoch, Batch, Root Loss, MAE, RMSE, dtbatch, epochh time, collate time')
 
             self._warm_restart(epoch)
@@ -293,7 +298,7 @@ class TrainCormorant:
 
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
-
+        
         dt = (datetime.now() - start_time).total_seconds()
         logging.info(' Done! (Time: {}s)'.format(dt))
 
@@ -320,6 +325,6 @@ class TrainCormorant:
         if self.args.predict:
             file = self.args.predictfile + '.' + suffix + '.' + dataset + '.pt'
             logging.info('Saving predictions to file: {}'.format(file))
-            torch.save({'predict': predict, 'targets': targets}, file)
+            torch.save({'predict': predict, 'targets': targets, 'stats': self.stats[self.args.target]}, file)
 
         return mae, rmse
