@@ -18,7 +18,7 @@ class TrainCormorant:
     """
     Class to train network. Includes checkpoints, optimizer, scheduler,
     """
-    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype):
+    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=None):
         self.args = args
         self.dataloaders = dataloaders
         self.model = model
@@ -26,8 +26,9 @@ class TrainCormorant:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.restart_epochs = restart_epochs
-
-        self.stats = dataloaders['train'].dataset.stats
+        
+        if stats is None:
+            self.stats = dataloaders['train'].dataset.stats
 
         # TODO: Fix this until TB summarize is implemented.
         self.summarize = False

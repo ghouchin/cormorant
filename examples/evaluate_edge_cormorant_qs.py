@@ -20,6 +20,7 @@ torch.set_printoptions(linewidth=1000, threshold=100000)
 logger = logging.getLogger('')
 
 
+
 def main():
 
     # Initialize arguments -- Just
@@ -38,10 +39,17 @@ def main():
     global_cg_dict(maxl=max(args.maxl+args.max_sh), dtype=dtype, device=device)
 
     # Initialize dataloder
-    additional_atom_features = ['partial_qs']
-
-    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
+    additional_atom_features = ['zeros']
+    
     edge_features = ['jj_all', 'jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN', 'jj_fc', 'jj_sd', 'jj_pso', 'jj_dso']
+
+    args, old_datasets, num_species, charge_scale = init_eval_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
+    old_data_loader = DataLoader(datasets['train'], batch_size=args.batch_size, 
+            shuffle=args.shuffle if (split == 'train') else False, 
+            num_workers=args.num_workers, 
+            collate_fn=lambda x: collate_fn(x, edge_features))
+
+    args, datasets, num_species, charge_scale = init_eval_dataset(args, args.datadir, file_name='targets_test_expanded.npz', additional_atom_features=additional_atom_features)
     dataloaders = {split: DataLoader(dataset,
                                      batch_size=args.batch_size,
                                      shuffle=args.shuffle if (split == 'train') else False,
@@ -71,16 +79,20 @@ def main():
     cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
-    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
+    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=old_data_loader.stats)
 
     # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
     trainer.load_checkpoint()
 
     # Train model.
-    trainer.train()
+    # trainer.train()
 
     # Test predictions on best model and also last checkpointed model.
-    trainer.evaluate()
+    predictions, targets = trainer.predict(set='test')
+    predictions = predictions.detach().numpy()
+    targets = targets.detach().numpy()
+    np.save(args.predictdir + 'final_predictions.npy', predictions)
+    np.save(args.predictdir + 'final_targets.npy', targets)
 
 
 if __name__ == '__main__':
