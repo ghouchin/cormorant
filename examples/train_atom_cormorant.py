@@ -40,8 +40,8 @@ def main():
     additional_atom_features = ['partial_qs']
 
     # Initialize dataloder
-    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
-    edge_features = ['jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
+    args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features, trim=False)
+    edge_features = ['jj_all', 'jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
 
     # Construct PyTorch dataloaders from datasets
     dataloaders = {split: DataLoader(dataset,
@@ -69,7 +69,8 @@ def main():
     cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
-    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
+    stats = {'partial_qs': (0., 1.)}
+    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=stats)
 
     # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
     trainer.load_checkpoint()
