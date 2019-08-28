@@ -195,11 +195,8 @@ class AtomCormorant(nn.Module):
             edges_all.append(edge_net)
 
         # Construct scalars for network output
-        print('atoms shape', atoms_all[-1][0].shape)
         scalars = self.scalar_func(atoms_all)
-        print('scalars shape', scalars.shape)
         prediction = self.top_func(scalars, atom_mask)
-        print('prediction shape', prediction.shape)
 
         # Covariance test
         if covariance_test:

@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 
 import logging
 
-from cormorant.models import EdgeCormorant
+from cormorant.models import AtomCormorant
 from cormorant.tests import cormorant_tests
 
 from cormorant.train import TrainCormorant
@@ -37,11 +37,9 @@ def main():
     # Initializing CG coefficients
     global_cg_dict(maxl=max(args.maxl+args.max_sh), dtype=dtype, device=device)
 
-    # Initialize dataloder
-    # additional_atom_features = ['G_charges']
     additional_atom_features = ['partial_qs']
-    # additional_atom_features = None
 
+    # Initialize dataloder
     args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
     edge_features = ['jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
 
@@ -53,13 +51,11 @@ def main():
                                      collate_fn=lambda x: collate_fn(x, edge_features)) for split, dataset in datasets.items()}
 
     # Initialize model
-    model = EdgeCormorant(args.num_cg_levels, args.maxl, args.max_sh, args.num_channels, num_species,
+    model = AtomCormorant(args.num_cg_levels, args.maxl, args.max_sh, args.num_channels, num_species,
                           args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                           args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                           charge_scale, args.gaussian_mask,
-                          args.top, args.input, args.num_mpnn_levels, args.num_top_levels,
-                          activation=args.top_activation,
-                          additional_atom_features=additional_atom_features, num_scalars_in=16,
+                          args.top, args.input, args.num_mpnn_levels,
                           device=device, dtype=dtype)
 
     # Initialize the scheduler and optimizer
