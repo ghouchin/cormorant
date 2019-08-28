@@ -237,14 +237,13 @@ class OutputEdgeMLP(nn.Module):
         return prediction
 
 
-
 class OutputMPNN(nn.Module):
     def __init__(self, channels_in, num_levels=1,
                  soft_cut_rad=None, soft_cut_width=None, hard_cut_rad=None, cutoff_type=['learn'],
                  channels_mlp=-1, num_hidden=1, layer_width=256,
                  activation='leakyrelu', basis_set=(3, 3),
                  device=torch.device('cpu'), dtype=torch.float):
-        super(InputMPNN, self).__init__()
+        super(OutputMPNN, self).__init__()
 
         self.soft_cut_rad = soft_cut_rad
         self.soft_cut_width = soft_cut_width
@@ -314,6 +313,27 @@ class OutputMPNN(nn.Module):
 
         return out
 
+
+class OutputAtomMLP(nn.Module):
+    """
+    Multilayer perceptron.
+    """
+
+    def __init__(self, num_scalars, num_hidden=1, layer_width=256, activation='leakyrelu', device=torch.device('cpu'), dtype=torch.float):
+        super(OutputAtomMLP, self).__init__()
+
+        self.num_scalars = num_scalars
+        self.basic_mlp = BasicMLP(2*num_scalars, 1, num_hidden=num_hidden, layer_width=layer_width, activation=activation, device=device, dtype=dtype)
+
+    def forward(self, scalars, ignore=None):
+        # scalars = scalars.sum(1)
+        scalars = scalars.view((scalars.shape[0], scalars.shape[1], 2*self.num_scalars))
+
+        predict = self.basic_mlp(scalars)
+
+        predict = predict.squeeze(-1)
+
+        return predict
 
 
 class OutputMLP(nn.Module):
