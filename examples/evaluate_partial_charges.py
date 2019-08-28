@@ -3,8 +3,7 @@ from torch.utils.data import DataLoader
 
 import logging
 
-from cormorant.models import EdgeCormorant
-from cormorant.tests import cormorant_tests
+from cormorant.models import AtomCormorant
 
 from cormorant.train import TrainCormorant
 from cormorant.train import init_argparse, init_file_paths, init_logger, init_cuda
@@ -41,14 +40,14 @@ def main():
     additional_atom_features = ['partial_qs']
 
     edge_features = ['jj_all', 'jj_1', 'jj_2', 'jj_3', '1JHC', '1JHN', '2JHH', '2JHC', '2JHN', '3JHH', '3JHC', '3JHN']
-    args, old_datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
+    args, old_datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features, trim=False)
     # print('first dataset loaded')
     # old_data_loader = DataLoader(old_datasets['train'], batch_size=args.batch_size,
     #                              shuffle=args.shuffle, num_workers=args.num_workers,
     #                              collate_fn=lambda x: collate_fn(x, edge_features))
 
     # args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_test_expanded.npz', additional_atom_features=additional_atom_features)
-    args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_train_dummy_sub.npz', additional_atom_features=additional_atom_features)
+    args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_train_dummy_sub.npz', additional_atom_features=additional_atom_features, trim=False)
     print('second dataset loaded')
     # args, datasets, num_species, charge_scale = init_nmr_eval_kaggle_dataset(args, args.datadir, file_name='targets_train_dummy_sub.npz', additional_atom_features=additional_atom_features)
     dataloaders = {split: DataLoader(dataset,
