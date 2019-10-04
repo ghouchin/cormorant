@@ -116,7 +116,7 @@ class RadPolyTrig(nn.Module):
         s = norms.shape
 
         # Mask and reshape
-        positive_norms = (norms > 0).byte()
+        positive_norms = (norms > 0)
         edge_mask = (edge_mask * positive_norms).unsqueeze(-1)
         norms = norms.unsqueeze(-1)
 
