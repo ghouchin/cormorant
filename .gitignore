@@ -7,18 +7,13 @@
 /data/
 TODO.txt
 /scratch/
-/examples/predict/
-/examples/model/
-/examples/log/
-/examples/old/
-/examples/out/
-/examples/output/
 /examples/data/
-/examples/*.sh
-/examples/*.sbatch
+/build/
+/dist/
 
 *.egg-info/
 __pycache__/
+*__pycache__/
 
 *.DS*
 *.log
@@ -29,6 +24,9 @@ __pycache__/
 *.json
 *.graphml
 *.ipynb
+*.swp
+*.swo
+*.pyc
 
 # Sphinx
 docs/_build

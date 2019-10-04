@@ -27,7 +27,7 @@ class ProcessedDataset(Dataset):
     subtract_thermo : bool, optional
         If True, subtracts the thermochemical energy of the atoms from each molecule in GDB9.
         Does nothing for other datasets.
-        
+
     """
     def __init__(self, data, included_species=None, num_pts=-1, normalize=True, shuffle=True, subtract_thermo=True):
 
@@ -37,7 +37,7 @@ class ProcessedDataset(Dataset):
             self.num_pts = len(data['charges'])
         else:
             if num_pts > len(data['charges']):
-                logging.warn('Desired number of points ({}) is greater than the number of data points ({}) available in the dataset!'.format(num_pts, len(data['charges'])))
+                logging.warning('Desired number of points ({}) is greater than the number of data points ({}) available in the dataset!'.format(num_pts, len(data['charges'])))
                 self.num_pts = len(data['charges'])
             else:
                 self.num_pts = num_pts
@@ -51,7 +51,7 @@ class ProcessedDataset(Dataset):
         if subtract_thermo:
             thermo_targets = [key.split('_')[0] for key in data.keys() if key.endswith('_thermo')]
             if len(thermo_targets) == 0:
-                logging.warn('No thermochemical targets included! Try reprocessing dataset with --force-download!')
+                logging.warning('No thermochemical targets included! Try reprocessing dataset with --force-download!')
             else:
                 logging.info('Removing thermochemical energy from targets {}'.format(' '.join(thermo_targets)))
             for key in thermo_targets:
@@ -67,13 +67,22 @@ class ProcessedDataset(Dataset):
         self.parameters = {'num_species': self.num_species, 'max_charge': self.max_charge}
 
         # Get a dictionary of statistics for all properties that are one-dimensional tensors.
-        self.stats = {key: (val.mean(), val.std()) for key, val in self.data.items() if type(val) is torch.Tensor and val.dim() == 1 and val.is_floating_point()}
+        self.calc_stats()
 
         if shuffle:
             self.perm = torch.randperm(len(data['charges']))[:self.num_pts]
         else:
             self.perm = None
 
+    def calc_stats(self):
+        self.stats = {key: (val.mean(), val.std()) for key, val in self.data.items() if type(val) is torch.Tensor and val.dim() == 1 and val.is_floating_point()}
+
+    def convert_units(self, units_dict):
+        for key in self.data.keys():
+            if key in units_dict:
+                self.data[key] *= units_dict[key]
+
+        self.calc_stats()
 
     def __len__(self):
         return self.num_pts

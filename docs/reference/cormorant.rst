@@ -4,7 +4,7 @@ Cormorant
 Base Cormorant Class
 --------------------
 
-.. autoclass:: cormorant.Cormorant
+.. autoclass:: cormorant.models.Cormorant
     :members:
 
 Component Modules

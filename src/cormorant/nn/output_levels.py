@@ -1,13 +1,31 @@
 import torch
 import torch.nn as nn
 
-from . import BasicMLP, cat_reps
+from cormorant.nn import BasicMLP
+from cormorant.so3_lib import cat
 
 ############# Get Scalars #############
 
-class GetScalars(nn.Module):
+class GetScalarsAtom(nn.Module):
+    """
+    Construct a set of scalar feature vectors for each atom by using the
+    covariant atom :class:`SO3Vec` representations at various levels.
+
+    Parameters
+    ----------
+    tau_levels : :class:`list` of :class:`SO3Tau`
+        Multiplicities of the output :class:`SO3Vec` at each level.
+    full_scalars : :class:`bool`, optional
+        Construct a more complete set of scalar invariants from the full
+        :class:`SO3Vec` (``true``), or just use the :math:``\ell=0`` component
+        (``false``).
+    device : :class:`torch.device`, optional
+        Device to instantite the module to.
+    dtype : :class:`torch.dtype`, optional
+        Data type to instantite the module to.
+    """
     def __init__(self, tau_levels, full_scalars=True, device=torch.device('cpu'), dtype=torch.float):
-        super(GetScalars, self).__init__()
+        super().__init__()
 
         self.device = device
         self.dtype = dtype
@@ -31,9 +49,22 @@ class GetScalars(nn.Module):
 
         print('Number of scalars at top:', self.num_scalars)
 
-    def forward(self, reps_levels):
+    def forward(self, reps_all_levels):
+        """
+        Forward step for :class:`GetScalarsAtom`
 
-        reps = cat_reps(reps_levels)
+        Parameters
+        ----------
+        reps_all_levels : :class:`list` of :class:`SO3Vec`
+            List of covariant atom features at each level
+
+        Returns
+        -------
+        scalars : :class:`torch.Tensor`
+            Invariant scalar atom features constructed from ``reps_all_levels``
+        """
+
+        reps = cat(reps_all_levels)
 
         scalars = reps[0]
 
@@ -47,14 +78,30 @@ class GetScalars(nn.Module):
 
             scalars = torch.cat(scalars, dim=-3)
 
-        # print(torch.tensor([p.abs().sum() for p in scalars.split(self.split, dim=2)]))
-
         return scalars
 
 
 ############# Output of network #############
 
 class OutputLinear(nn.Module):
+    """
+    Module to create prediction based upon a set of rotationally invariant
+    atom feature vectors. This is performed in a permutation invariant way
+    by using a (batch-masked) sum over all atoms, and then applying a
+    linear mixing layer to predict a single output.
+
+    Parameters
+    ----------
+    num_scalars : :class:`int`
+        Number scalars that will be used in the prediction at the output
+        of the network.
+    bias : :class:`bool`, optional
+        Include a bias term in the linear mixing level.
+    device : :class:`torch.device`, optional
+        Device to instantite the module to.
+    dtype : :class:`torch.dtype`, optional
+        Data type to instantite the module to.
+    """
     def __init__(self, num_scalars, bias=True, device=torch.device('cpu'), dtype=torch.float):
         super(OutputLinear, self).__init__()
 
@@ -66,11 +113,26 @@ class OutputLinear(nn.Module):
 
         self.zero = torch.tensor(0, dtype=dtype, device=device)
 
-    def forward(self, scalars, ignore=True):
-        s = scalars.shape
-        scalars = scalars.view((s[0], s[1], -1)).sum(1)
+    def forward(self, atom_scalars, atom_mask):
+        """
+        Forward step for :class:`OutputLinear`
 
-        predict = self.lin(scalars)
+        Parameters
+        ----------
+        atom_scalars : :class:`torch.Tensor`
+            Scalar features for each atom used to predict the final learning target.
+        atom_mask : :class:`torch.Tensor`
+            Unused. Included only for pedagogical purposes.
+
+        Returns
+        -------
+        predict : :class:`torch.Tensor`
+            Tensor used for predictions.
+        """
+        s = atom_scalars.shape
+        atom_scalars = atom_scalars.view((s[0], s[1], -1)).sum(1)  # No masking needed b/c summing over atoms
+
+        predict = self.lin(atom_scalars)
 
         predict = predict.squeeze(-1)
 
@@ -78,8 +140,29 @@ class OutputLinear(nn.Module):
 
 
 class OutputPMLP(nn.Module):
-    """ Iterated MLP of the type used in KLT """
-    def __init__(self, num_scalars, num_mixed=64, num_hidden=1, layer_width=256, activation='leakyrelu', device=torch.device('cpu'), dtype=torch.float):
+    """
+    Module to create prediction based upon a set of rotationally invariant
+    atom feature vectors.
+
+    This is peformed in a three-step process::
+
+    (1) A MLP is applied to each set of scalar atom-features.
+    (2) The environments are summed up.
+    (3) Another MLP is applied to the output to predict a single learning target.
+
+    Parameters
+    ----------
+    num_scalars : :class:`int`
+        Number scalars that will be used in the prediction at the output
+        of the network.
+    bias : :class:`bool`, optional
+        Include a bias term in the linear mixing level.
+    device : :class:`torch.device`, optional
+        Device to instantite the module to.
+    dtype : :class:`torch.dtype`, optional
+        Data type to instantite the module to.
+    """
+    def __init__(self, num_scalars, num_mixed=64, activation='leakyrelu', device=torch.device('cpu'), dtype=torch.float):
         super(OutputPMLP, self).__init__()
 
         self.num_scalars = num_scalars
@@ -90,16 +173,31 @@ class OutputPMLP(nn.Module):
 
         self.zero = torch.tensor(0, device=device, dtype=dtype)
 
-    def forward(self, scalars, mask):
+    def forward(self, atom_scalars, atom_mask):
+        """
+        Forward step for :class:`OutputPMLP`
+
+        Parameters
+        ----------
+        atom_scalars : :class:`torch.Tensor`
+            Scalar features for each atom used to predict the final learning target.
+        atom_mask : :class:`torch.Tensor`
+            Unused. Included only for pedagogical purposes.
+
+        Returns
+        -------
+        predict : :class:`torch.Tensor`
+            Tensor used for predictions.
+        """
         # Reshape scalars appropriately
-        scalars = scalars.view(scalars.shape[:2] + (2*self.num_scalars,))
+        atom_scalars = atom_scalars.view(atom_scalars.shape[:2] + (2*self.num_scalars,))
 
         # First MLP applied to each atom
-        x = self.mlp1(scalars)
+        x = self.mlp1(atom_scalars)
 
         # Reshape to sum over each atom in molecules, setting non-existent atoms to zero.
-        mask = mask.unsqueeze(-1)
-        x = torch.where(mask, x, self.zero).sum(1)
+        atom_mask = atom_mask.unsqueeze(-1)
+        x = torch.where(atom_mask, x, self.zero).sum(1)
 
         # Prediction on permutation invariant representation of molecules
         predict = self.mlp2(x)
