@@ -1,17 +1,15 @@
 import torch
-# from torch.utils.data import DataLoader
-# import torch.optim as optim
-# import torch.optim.lr_scheduler as sched
 import logging
 import os
 from datetime import datetime
-from math import sqrt, inf, ceil, log
+from math import sqrt, inf, ceil
 
 MAE = torch.nn.L1Loss()
 MSE = torch.nn.MSELoss()
 RMSE = lambda x, y: sqrt(MSE(x, y))
 
 logger = logging.getLogger(__name__)
+
 
 class Engine:
     """
@@ -21,7 +19,7 @@ class Engine:
 
     Roughly based upon TorchNet
     """
-    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=None):
+    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=None, remove_nonzero=False):
         self.args = args
         self.dataloaders = dataloaders
         self.model = model
@@ -29,6 +27,7 @@ class Engine:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.restart_epochs = restart_epochs
+        self.remove_nonzero = remove_nonzero
 
         if stats is None:
             self.stats = dataloaders['train'].dataset.stats
@@ -71,8 +70,8 @@ class Engine:
 
         Parameters
         ----------
-        load_training_state : bool
-            If true, load the training state as well.  
+        load_training_state : :class:`bool`
+            If true, load the training state as well.
             Else, begins the training from scratch.
         """
         if not self.args.load:
@@ -190,12 +189,11 @@ class Engine:
         epoch0 = self.epoch
         for epoch in range(epoch0, self.args.num_epoch):
             self.epoch = epoch
-            # epoch_time = datetime.now()
             logging.info('Starting Epoch: {}'.format(epoch+1))
             logging.info('NUM TRAINING POINTS: {}'.format(self.dataloaders['train'].dataset.num_pts))
             logging.info('NUM VALIDATION POINTS: {}'.format(self.dataloaders['valid'].dataset.num_pts))
             logging.info('NUM TESTING POINTS: {}'.format(self.dataloaders['test'].dataset.num_pts))
-            logging.info('Epoch, Batch, Root Loss, MAE, RMSE, dtbatch, epochh time, collate time')
+            logging.info('Epoch, Batch, Root Loss, MAE, RMSE, dtbatch, epoch time, collate time')
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
@@ -257,9 +255,13 @@ class Engine:
             self.optimizer.zero_grad()
 
             # Get targets and predictions
-            targets, nonzero = self._get_target_nonzero(data, self.stats)
-            predict = self.model(data)
-            predict = predict[nonzero]
+            if self.remove_nonzero:
+                targets, nonzero = self._get_target_nonzero(data, self.stats)
+                predict = self.model(data)
+                predict = predict[nonzero]
+            else:
+                targets = self._get_target(data, self.stats)
+                predict = self.model(data)
 
             # Calculate loss and backprop
             loss = self.loss_fn(predict, targets)
@@ -291,17 +293,20 @@ class Engine:
         logging.info('Starting testing on {} set: '.format(set))
 
         for batch_idx, data in enumerate(dataloader):
-
-            targets, nonzero = self._get_target_nonzero(data, self.stats)
-            predict = self.model(data).detach()
-            predict = predict[nonzero]
+            if self.remove_nonzero:
+                targets, nonzero = self._get_target_nonzero(data, self.stats)
+                predict = self.model(data).detach()
+                predict = predict[nonzero]
+            else:
+                targets = self._get_target(data, self.stats)
+                predict = self.model(data).detach()
 
             all_targets.append(targets)
             all_predict.append(predict)
 
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
-        
+
         dt = (datetime.now() - start_time).total_seconds()
         logging.info(' Done! (Time: {}s)'.format(dt))
 

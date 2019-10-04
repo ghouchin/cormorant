@@ -175,10 +175,6 @@ def setup_shared_args(parser):
                         help='Number levels to use in input featurization MPNN. (default: 1)')
     parser.add_argument('--top', '--output', type=str, default='linear',
                         help='Top function to use (linear | PMLP) default: linear')
-    parser.add_argument('--num-top-levels', type=int, default=1,
-                        help='Number levels to use in top layer. (default: 1)')
-    parser.add_argument('--top-activation', type=str, default='leakyrelu',
-                        help='Activation to use in the top layer')
     parser.add_argument('--gaussian-mask', action='store_true',
                         help='Use gaussian mask instead of sigmoid mask.')
     parser.add_argument('--edge-cat', action='store_true',
