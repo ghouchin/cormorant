@@ -1,21 +1,19 @@
 import torch
 import torch.nn as nn
-import numpy as np
 
 import logging
 
-from cormorant.cg_lib import SphericalHarmonicsRel
+from cormorant.cg_lib import CGModule, SphericalHarmonicsRel
 
+from cormorant.models.cormorant_cg import CormorantCG
 from cormorant.models.cormorant_levels import CormorantAtomLevel, CormorantEdgeLevel
 
 from cormorant.nn import RadialFilters
 from cormorant.nn import InputLinear, InputMPNN
-from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalars
-from cormorant.nn import scalar_mult_rep
-from cormorant.models.cormorant import expand_var_list
+from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalarsAtom
 
 
-class EdgeCormorant(nn.Module):
+class EdgeCormorant(CGModule):
     """
     An example of the Cormorant architecture used to predict edge feautures.
     The network consists of one or more MPNN layers, followed by one or more
@@ -52,51 +50,55 @@ class EdgeCormorant(nn.Module):
                  charge_scale, gaussian_mask, top, input, num_mpnn_layers, 
                  num_top_layers, num_scalars_in=None, num_out=1, activation='leakyrelu',
                  additional_atom_features=None,
-                 device=torch.device('cpu'), dtype=torch.float):
-        super(EdgeCormorant, self).__init__()
+                 device=torch.device('cpu'), dtype=torch.float, cg_dict=None):
 
         logging.info('Initializing network!')
-
-        self.num_cg_levels = num_cg_levels
-        self.maxl = maxl
-        self.max_sh = max_sh
-
-        self.device = device
-        self.dtype = dtype
-
         level_gain = expand_var_list(level_gain, num_cg_levels)
 
         hard_cut_rad = expand_var_list(hard_cut_rad, num_cg_levels)
         soft_cut_rad = expand_var_list(soft_cut_rad, num_cg_levels)
         soft_cut_width = expand_var_list(soft_cut_width, num_cg_levels)
-
+        
         maxl = expand_var_list(maxl, num_cg_levels)
         max_sh = expand_var_list(max_sh, num_cg_levels)
         num_channels = expand_var_list(num_channels, num_cg_levels)
-
-        self.num_channels = num_channels
-        self.charge_power = charge_power
-        self.charge_scale = charge_scale
-        self.num_species = num_species
-
-        if additional_atom_features is None:
-            self.additional_atom_features = []
-        else:
-            self.additional_atom_features = list(additional_atom_features)
-
+        
         logging.info('hard_cut_rad: {}'.format(hard_cut_rad))
         logging.info('soft_cut_rad: {}'.format(soft_cut_rad))
         logging.info('soft_cut_width: {}'.format(soft_cut_width))
         logging.info('maxl: {}'.format(maxl))
         logging.info('max_sh: {}'.format(max_sh))
         logging.info('num_channels: {}'.format(num_channels))
+        
+        super().__init__(maxl=max(maxl+max_sh), device=device, dtype=dtype, cg_dict=cg_dict)
+        
+        device, dtype, cg_dict = self.device, self.dtype, self.cg_dict
+
+        self.num_cg_levels = num_cg_levels
+        self.maxl = maxl
+        self.max_sh = max_sh
+        
+        self.num_cg_levels = num_cg_levels
+        self.num_channels = num_channels
+        self.charge_power = charge_power
+        self.charge_scale = charge_scale
+        self.num_species = num_species
+
+
+        if additional_atom_features is None:
+            self.additional_atom_features = []
+        else:
+            self.additional_atom_features = list(additional_atom_features)
 
         # Set up spherical harmonics
-        self.spherical_harmonics_rel = SphericalHarmonicsRel(max(self.max_sh), sh_norm='unit', device=device, dtype=dtype)
+        # self.spherical_harmonics_rel = SphericalHarmonicsRel(max(self.max_sh), sh_norm='unit', device=device, dtype=dtype)
+        self.sph_harms = SphericalHarmonicsRel(max(max_sh), conj=True,
+                                               device=device, dtype=dtype, cg_dict=cg_dict)
 
-        # Set up position functions, now independent of spherical harmonics
-        self.position_functions = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels, device=device, dtype=dtype)
-        tau_pos = self.position_functions.tau
+        # Set up radial functions, now independent of spherical harmonics
+        self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
+                                       device=self.device, dtype=self.dtype)
+        tau_pos = self.rad_funcs.tau
         
         if num_scalars_in is None:
             num_scalars_in = self.num_species * (self.charge_power + 1)
@@ -112,33 +114,40 @@ class EdgeCormorant(nn.Module):
         else:
             raise ValueError('Improper choice of input featurization of network! {}'.format(input))
 
-        tau_in = [num_scalars_out]
+        tau_in_atom = self.input_func_atom.tau
+        tau_in_edge = self.input_func_edge.tau
 
-        tau_edge = [0]
+        logging.info('{} {}'.format(tau_in_atom, tau_in_edge))
+        
+        self.cormorant_cg = CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
+                     tau_pos, num_cg_levels, num_channels, level_gain, weight_init,
+                     cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
+                     cat=True, gaussian_mask=False,
+                     device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
 
-        logging.info('{} {}'.format(tau_in, tau_edge))
+        # atom_levels = nn.ModuleList()
+        # edge_levels = nn.ModuleList()
+        # for level in range(self.num_cg_levels):
+        #     # First add the edge, since the output type determines the next level
+        #     edge_lvl = CormorantEdgeLevel(tau_edge, tau_in, tau_pos[level], num_channels[level],
+        #                                   cutoff_type, hard_cut_rad[level], soft_cut_rad[level], soft_cut_width[level],
+        #                                   gaussian_mask=gaussian_mask, device=device, dtype=dtype)
+        #     edge_levels.append(edge_lvl)
+        #     tau_edge = edge_lvl.tau_out
 
-        atom_levels = nn.ModuleList()
-        edge_levels = nn.ModuleList()
-        for level in range(self.num_cg_levels):
-            # First add the edge, since the output type determines the next level
-            edge_lvl = CormorantEdgeLevel(tau_edge, tau_in, tau_pos[level], num_channels[level],
-                                          cutoff_type, hard_cut_rad[level], soft_cut_rad[level], soft_cut_width[level],
-                                          gaussian_mask=gaussian_mask, device=device, dtype=dtype)
-            edge_levels.append(edge_lvl)
-            tau_edge = edge_lvl.tau_out
+        #     # Now add the NBody level
+        #     atom_lvl = CormorantAtomLevel(tau_in, tau_edge, maxl[level], num_channels[level], level_gain[level], weight_init,
+        #                                   device=device, dtype=dtype)
+        #     atom_levels.append(atom_lvl)
+        #     tau_in = atom_lvl.tau_out
 
-            # Now add the NBody level
-            atom_lvl = CormorantAtomLevel(tau_in, tau_edge, maxl[level], num_channels[level], level_gain[level], weight_init,
-                                          device=device, dtype=dtype)
-            atom_levels.append(atom_lvl)
-            tau_in = atom_lvl.tau_out
+        #     logging.info('{} {}'.format(tau_in, tau_edge))
 
-            logging.info('{} {}'.format(tau_in, tau_edge))
+        # self.atom_levels = atom_levels
+        # self.edge_levels = edge_levels
 
-        self.atom_levels = atom_levels
-        self.edge_levels = edge_levels
-
+        tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
+        tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
         self.tau_levels_out = [level.tau_out for level in edge_levels]
         num_mlp_channels = sum([sum(level) for level in self.tau_levels_out])
         top = top.lower()
@@ -228,15 +237,17 @@ class EdgeCormorant(nn.Module):
         one_hot = data['one_hot'].to(device, dtype)
         charges = data['charges'].to(device, dtype)
 
-        atom_mask = data['atom_mask'].to(device, torch.uint8)
-        edge_mask = data['edge_mask'].to(device, torch.uint8)
+        atom_mask = data['atom_mask'].to(device)
+        edge_mask = data['edge_mask'].to(device)
 
         charge_tensor = (charges.unsqueeze(-1)/charge_scale).pow(torch.arange(charge_power+1., device=device, dtype=dtype))
         charge_tensor = charge_tensor.view(charges.shape + (1, charge_power+1))
-        scalars = (one_hot.unsqueeze(-1) * charge_tensor).view(charges.shape[:2] + (-1,))
-        scalars = self._add_additional_features(scalars, data)
+        atom_scalars = (one_hot.unsqueeze(-1) * charge_tensor).view(charges.shape[:2] + (-1,))
+        atom_scalars = self._add_additional_features(atom_scalars, data)
+        edge_scalars = torch.tensor([])
+        return atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions
 
-        return scalars, atom_mask, atom_positions, edge_mask
+        # return scalars, atom_mask, atom_positions, edge_mask
 
     def _add_additional_features(self, scalars, data):
         device, dtype = self.device, self.dtype
@@ -262,3 +273,13 @@ class EdgeCormorant(nn.Module):
                 scalar_list.append(hybridizations_data)
             scalars = torch.cat(scalar_list, dim=2)
         return scalars
+
+
+def expand_var_list(var, num_cg_levels):
+    if type(var) is list:
+        var_list = var + (num_cg_levels-len(var))*[var[-1]]
+    elif type(var) in [float, int]:
+        var_list = [var] * num_cg_levels
+    else:
+        raise ValueError('Incorrect type {}'.format(type(var)))
+    return var_list
