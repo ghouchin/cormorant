@@ -5,7 +5,7 @@ import logging
 import os
 
 from torch.utils.data import DataLoader
-from cormorant.data.dataset_kaggle import KaggleTrainDataset
+from cormorant.data.dataset_kaggle import KaggleDataset
 from cormorant.data.prepare import prepare_dataset
 
 
@@ -51,7 +51,7 @@ def init_nmr_kaggle_dataset(args, datadir, file_name='targets_train.npz', trim=T
         for key, val in data.items():
             data_splits[split_name][key] = val[split_idxs]
 
-    datasets = {split: KaggleTrainDataset(data, additional_atom_features=additional_atom_features) for split, data in data_splits.items()}
+    datasets = {split: KaggleDataset(data, additional_atom_features=additional_atom_features) for split, data in data_splits.items()}
     
     if trim:
         datasets = {split: trim_dataset(args.target, dataset) for split, dataset in datasets.items()}
@@ -72,7 +72,7 @@ def init_nmr_kaggle_dataset(args, datadir, file_name='targets_train.npz', trim=T
 def init_nmr_eval_kaggle_dataset(args, datadir, file_name='targets_test.npz', trim=True, additional_atom_features=None):
     data = np.load(datadir + 'champs-scalar-coupling/' + file_name, allow_pickle=True)
     data = {key: val for (key, val) in data.items()}
-    datasets = {'test': KaggleTrainDataset(data, additional_atom_features=additional_atom_features, shuffle=False)}
+    datasets = {'test': KaggleDataset(data, additional_atom_features=additional_atom_features, shuffle=False)}
     
     if trim:
         datasets = {split: trim_dataset(args.target, dataset) for split, dataset in datasets.items()}
@@ -95,12 +95,12 @@ def trim_dataset(target, dataset):
     ----------
     target : str
         Name of the target being optimized for
-    dataset : KaggleTrainDataset object
+    dataset : KaggleDataset object
         Dataset to be trimmed
 
     Returns
     -------
-    data : KaggleTrainDataset
+    data : KaggleDataset
         Trimmed dataset.
     """
     target_column = dataset.data[target + "_value"]

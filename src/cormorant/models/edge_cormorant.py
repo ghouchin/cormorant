@@ -11,6 +11,7 @@ from cormorant.models.cormorant_levels import CormorantAtomLevel, CormorantEdgeL
 from cormorant.nn import RadialFilters
 from cormorant.nn import InputLinear, InputMPNN
 from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalarsAtom, GetScalarsEdge
+from cormorant.nn import NoLayer
 
 
 class EdgeCormorant(CGModule):
@@ -61,7 +62,7 @@ class EdgeCormorant(CGModule):
         
         maxl = expand_var_list(maxl, num_cg_levels)
         max_sh = expand_var_list(max_sh, num_cg_levels)
-        num_channels = expand_var_list(num_channels, num_cg_levels)
+        num_channels = expand_var_list(num_channels, num_cg_levels+1)
         
         logging.info('hard_cut_rad: {}'.format(hard_cut_rad))
         logging.info('soft_cut_rad: {}'.format(soft_cut_rad))
@@ -75,8 +76,6 @@ class EdgeCormorant(CGModule):
         device, dtype, cg_dict = self.device, self.dtype, self.cg_dict
 
         self.num_cg_levels = num_cg_levels
-        self.maxl = maxl
-        self.max_sh = max_sh
         
         self.num_cg_levels = num_cg_levels
         self.num_channels = num_channels
@@ -108,11 +107,12 @@ class EdgeCormorant(CGModule):
 
         input = input.lower()
         if input == 'linear':
-            self.input_func = InputLinear(num_scalars_in, num_scalars_out, device=self.device, dtype=self.dtype)
+            self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out, device=self.device, dtype=self.dtype)
         elif input == 'mpnn':
-            self.input_func = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers, soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0], activation=activation, device=self.device, dtype=self.dtype)
+            self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers, soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0], activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of input featurization of network! {}'.format(input))
+        self.input_func_edge = NoLayer()
 
         tau_in_atom = self.input_func_atom.tau
         tau_in_edge = self.input_func_edge.tau
@@ -152,17 +152,17 @@ class EdgeCormorant(CGModule):
         self.get_scalars_atom = NoLayer()
         self.get_scalars_edge = GetScalarsEdge(tau_cg_levels_edge,
                                                device=self.device, dtype=self.dtype)
-        
+
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
-        self.tau_levels_out = [level.tau_out for level in edge_levels]
-        
+        # self.tau_levels_out = [level.tau_out for level in edge_levels]
+
         top = top.lower()
         if top == 'linear':
-            self.top_func = OutputEdgeLinear(num_scalars_edge, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
+            self.output_layer_edge = OutputEdgeLinear(num_scalars_edge, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
         elif top == 'mlp':
-            self.top_func = OutputEdgeMLP(num_scalars_edge, num_out=num_out, num_hidden=num_top_layers, activation=activation, device=self.device, dtype=self.dtype)
+            self.output_layer_edge = OutputEdgeMLP(num_scalars_edge, num_out=num_out, num_hidden=num_top_layers, activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of top of network! {}'.format(top))
 
@@ -190,19 +190,18 @@ class EdgeCormorant(CGModule):
         atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions = self.prepare_input(data)
 
         # Calculate spherical harmonics and radial functions
-        spherical_harmonics, norms = self.spherical_harmonics_rel(atom_positions, atom_positions)
+        spherical_harmonics, norms = self.sph_harms(atom_positions, atom_positions)
         rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
         atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
         edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
-        
+
         # Clebsch-Gordan layers central to the network
         atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
                                                  rad_func_levels, norms, spherical_harmonics)
-
         edge_scalars = self.get_scalars_edge(edges_all)
-        
+
         prediction = self.output_layer_edge(edge_scalars, edge_mask)
 
         # # Reshape the edge values into a single block

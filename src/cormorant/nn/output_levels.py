@@ -104,7 +104,7 @@ class GetScalarsEdge(nn.Module):
         self.device = device
         self.dtype = dtype
 
-        num_scalars = 2. * sum([sum(tau) for tau in tau_levels]) 
+        self.num_scalars = 2 * sum([sum(tau) for tau in tau_levels])
         # self.maxl = max([len(tau) for tau in tau_levels]) - 1
 
         # signs_tr = [torch.pow(-1, torch.arange(-m, m+1.)) for m in range(self.maxl+1)]
@@ -140,8 +140,8 @@ class GetScalarsEdge(nn.Module):
         """
 
         reps = cat(reps_all_levels)
-        individual_reps = [torch.cat(ri[..., 0], ri[..., 1], dim=reps.cdim) for ri in reps]
-        all_reps = torch.cat([ri for ri in reps])
+        individual_reps = [torch.cat((ri[..., 0], ri[..., 1]), dim=-1) for ri in reps]
+        all_reps = torch.cat([ri for ri in individual_reps], dim=-1)
         return all_reps
 
         # scalars = reps[0]
@@ -171,6 +171,9 @@ class OutputLinear(nn.Module):
     num_scalars : :class:`int`
         Number scalars that will be used in the prediction at the output
         of the network.
+    num_out: :class:`int`
+        Number outputs to the network. 
+        of the network.
     bias : :class:`bool`, optional
         Include a bias term in the linear mixing level.
     device : :class:`torch.device`, optional
@@ -178,13 +181,13 @@ class OutputLinear(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, num_scalars, bias=True, device=torch.device('cpu'), dtype=torch.float):
+    def __init__(self, num_scalars, num_out=1, bias=True, device=torch.device('cpu'), dtype=torch.float):
         super(OutputLinear, self).__init__()
 
         self.num_scalars = num_scalars
         self.bias = bias
 
-        self.lin = nn.Linear(num_scalars, 1, bias=bias)
+        self.lin = nn.Linear(num_scalars, num_out, bias=bias)
         self.lin.to(device=device, dtype=dtype)
 
         self.zero = torch.tensor(0, dtype=dtype, device=device)
@@ -307,6 +310,8 @@ class OutputEdgeLinear(nn.Module):
     def __init__(self, num_channels_in, num_out=1, bias=True, device=torch.device('cpu'), dtype=torch.float):
         super(OutputEdgeLinear, self).__init__()
 
+        print('num out in init', num_out)
+
         self.num_channels_in = num_channels_in
         self.lin = nn.Linear(num_channels_in, num_out, bias=bias).to(device=device, dtype=dtype)
         self.zero = torch.tensor(0, device=device, dtype=dtype)
@@ -334,7 +339,7 @@ class OutputEdgeLinear(nn.Module):
         """
         # Reshape scalars appropriately
         es = edge_scalars.shape
-        edge_scalars = edge_scalars.view(es[0:3] + (self.num_channels_in * 2,))
+        # edge_scalars = edge_scalars.view(es[0:3] + (self.num_channels_in * 2,))
 
         # First MLP applied to each atom
         x = self.lin(edge_scalars)
