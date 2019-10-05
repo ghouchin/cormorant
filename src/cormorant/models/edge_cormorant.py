@@ -10,7 +10,7 @@ from cormorant.models.cormorant_levels import CormorantAtomLevel, CormorantEdgeL
 
 from cormorant.nn import RadialFilters
 from cormorant.nn import InputLinear, InputMPNN
-from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalarsAtom
+from cormorant.nn import OutputEdgeMLP, OutputEdgeLinear, GetScalarsAtom, GetScalarsEdge
 
 
 class EdgeCormorant(CGModule):
@@ -148,13 +148,21 @@ class EdgeCormorant(CGModule):
 
         tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
         tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
+        
+        self.get_scalars_atom = NoLayer()
+        self.get_scalars_edge = GetScalarsEdge(tau_cg_levels_edge,
+                                               device=self.device, dtype=self.dtype)
+        
+        num_scalars_atom = self.get_scalars_atom.num_scalars
+        num_scalars_edge = self.get_scalars_edge.num_scalars
+
         self.tau_levels_out = [level.tau_out for level in edge_levels]
-        num_mlp_channels = sum([sum(level) for level in self.tau_levels_out])
+        
         top = top.lower()
         if top == 'linear':
-            self.top_func = OutputEdgeLinear(num_mlp_channels, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
+            self.top_func = OutputEdgeLinear(num_scalars_edge, num_out=num_out, bias=True, device=self.device, dtype=self.dtype)
         elif top == 'mlp':
-            self.top_func = OutputEdgeMLP(num_mlp_channels, num_out=num_out, num_hidden=num_top_layers, activation=activation, device=self.device, dtype=self.dtype)
+            self.top_func = OutputEdgeMLP(num_scalars_edge, num_out=num_out, num_hidden=num_top_layers, activation=activation, device=self.device, dtype=self.dtype)
         else:
             raise ValueError('Improper choice of top of network! {}'.format(top))
 
@@ -178,34 +186,34 @@ class EdgeCormorant(CGModule):
 
 
         """
-        input_scalars, atom_mask, atom_positions, edge_mask = self.prepare_input(data)
+        # Get and prepare the data
+        atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions = self.prepare_input(data)
 
+        # Calculate spherical harmonics and radial functions
         spherical_harmonics, norms = self.spherical_harmonics_rel(atom_positions, atom_positions)
-        positive_norms = (norms > 0).byte()
-        rad_func_levels = self.position_functions(norms, edge_mask * (positive_norms))
+        rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
 
-        atom_reps = [self.input_func(input_scalars, atom_mask, edge_mask, norms)]
-        edge_net = [torch.tensor([]).to(self.device, self.dtype)]
+        # Prepare the input reps for both the atom and edge network
+        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
+        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
+        
+        # Clebsch-Gordan layers central to the network
+        atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
+                                                 rad_func_levels, norms, spherical_harmonics)
 
-        # Construct iterated multipoles
-        atoms_all = []
-        edges_all = []
+        edge_scalars = self.get_scalars_edge(edges_all)
+        
+        prediction = self.output_layer_edge(edge_scalars, edge_mask)
 
-        for idx, (atom_level, edge_level) in enumerate(zip(self.atom_levels, self.edge_levels)):
-            edge_net = edge_level(edge_net, atom_reps, rad_func_levels[idx], edge_mask, atom_mask, norms, spherical_harmonics)
-            edge_reps = [scalar_mult_rep(edge, sph_harm) for (edge, sph_harm) in zip(edge_net, spherical_harmonics)]
-            atom_reps = atom_level(atom_reps, edge_reps, atom_mask)
-            atoms_all.append(atom_reps)
-            edges_all.append(edge_net)
+        # # Reshape the edge values into a single block
+        # stacked_edges = []
+        # for i, edge_reps_i in enumerate(edges_all):
+        #     stacked_edges.append(torch.cat(edge_reps_i, dim=3))
+        # all_edge_tensor = torch.cat(stacked_edges, dim=3)
 
-        # Reshape the edge values into a single block
-        stacked_edges = []
-        for i, edge_reps_i in enumerate(edges_all):
-            stacked_edges.append(torch.cat(edge_reps_i, dim=3))
-        all_edge_tensor = torch.cat(stacked_edges, dim=3)
+        # prediction = self.top_func(all_edge_tensor, edge_mask)
+        # # Covariance test
 
-        prediction = self.top_func(all_edge_tensor, edge_mask)
-        # Covariance test
         if covariance_test:
             return prediction, atoms_all, atoms_all
         else:

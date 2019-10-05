@@ -6,11 +6,10 @@ import logging
 from cormorant.models import EdgeCormorant
 from cormorant.tests import cormorant_tests
 
-from cormorant.train import TrainCormorant
-from cormorant.train import init_argparse, init_file_paths, init_logger, init_cuda
-from cormorant.train import init_optimizer, init_scheduler
+from cormorant.engine import Engine
+from cormorant.engine import init_argparse, init_file_paths, init_logger, init_cuda
+from cormorant.engine import init_optimizer, init_scheduler
 from cormorant.data.utils_kaggle import init_nmr_kaggle_dataset
-from cormorant.cg_lib import global_cg_dict
 
 from cormorant.data.collate import collate_fn
 
@@ -23,7 +22,7 @@ logger = logging.getLogger('')
 def main():
 
     # Initialize arguments -- Just
-    args = init_argparse()
+    args = init_argparse('qm9')
 
     # Initialize file paths
     args = init_file_paths(args)
@@ -34,12 +33,18 @@ def main():
     # Initialize device and data type
     device, dtype = init_cuda(args)
 
-    # Initializing CG coefficients
-    global_cg_dict(maxl=max(args.maxl+args.max_sh), dtype=dtype, device=device)
 
     # Initialize dataloder
     # additional_atom_features = ['G_charges']
     additional_atom_features = ['partial_qs']
+
+    ##### DEBUG #####
+    top = 'linear'
+    input_type = 'linear'
+    mpnn_levels = 0
+    num_top_levels = 0
+    top_activation = 'tanh'
+    #################
     # additional_atom_features = None
 
     args, datasets, num_species, charge_scale = init_nmr_kaggle_dataset(args, args.datadir, file_name='targets_train_expanded.npz', additional_atom_features=additional_atom_features)
@@ -53,12 +58,12 @@ def main():
                                      collate_fn=lambda x: collate_fn(x, edge_features)) for split, dataset in datasets.items()}
 
     # Initialize model
-    model = EdgeCormorant(args.num_cg_levels, args.maxl, args.max_sh, args.num_channels, num_species,
+    model = EdgeCormorant(args.maxl, args.num_cg_levels, args.max_sh, args.num_channels, num_species,
                           args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                           args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                           charge_scale, args.gaussian_mask,
-                          args.top, args.input, args.num_mpnn_levels, args.num_top_levels,
-                          activation=args.top_activation,
+                          # args.top, args.input, args.num_mpnn_levels, args.num_top_levels, activation=args.top_activation,
+                          top, input_type, mpnn_levels, num_top_levels, top_activation,
                           additional_atom_features=additional_atom_features, num_scalars_in=16,
                           device=device, dtype=dtype)
 
@@ -73,7 +78,7 @@ def main():
     cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
-    trainer = TrainCormorant(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
+    trainer = Engine(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
 
     # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
     trainer.load_checkpoint()

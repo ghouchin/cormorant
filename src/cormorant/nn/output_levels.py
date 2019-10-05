@@ -81,6 +81,82 @@ class GetScalarsAtom(nn.Module):
         return scalars
 
 
+class GetScalarsEdge(nn.Module):
+    """
+    Construct a set of scalar feature vectors for each edge.
+
+    Parameters
+    ----------
+    tau_levels : :class:`list` of :class:`SO3Tau`
+        Multiplicities of the output :class:`SO3Scalar` at each level.
+    full_scalars : :class:`bool`, optional
+        Construct a more complete set of scalar invariants from the full
+        :class:`SO3Vec` (``true``), or just use the :math:``\ell=0`` component
+        (``false``).
+    device : :class:`torch.device`, optional
+        Device to instantite the module to.
+    dtype : :class:`torch.dtype`, optional
+        Data type to instantite the module to.
+    """
+    def __init__(self, tau_levels, full_scalars=True, device=torch.device('cpu'), dtype=torch.float):
+        super().__init__()
+
+        self.device = device
+        self.dtype = dtype
+
+        num_scalars = 2. * sum([sum(tau) for tau in tau_levels]) 
+        # self.maxl = max([len(tau) for tau in tau_levels]) - 1
+
+        # signs_tr = [torch.pow(-1, torch.arange(-m, m+1.)) for m in range(self.maxl+1)]
+        # signs_tr = [torch.stack([s, -s], dim=-1) for s in signs_tr]
+        # self.signs_tr = [s.view(1, 1, 1, -1, 2).to(device=device, dtype=dtype) for s in signs_tr]
+
+        # split_l0 = [tau[0] for tau in tau_levels]
+        # split_full = [sum(tau) for tau in tau_levels]
+
+        # self.full_scalars = full_scalars
+        # if full_scalars:
+        #     self.num_scalars = sum(split_l0) + sum(split_full)
+        #     self.split = split_l0 + split_full
+        # else:
+        #     self.num_scalars = sum(split_l0)
+        #     self.split = split_l0
+
+        print('Number of scalars at top:', self.num_scalars)
+
+    def forward(self, reps_all_levels):
+        """
+        Forward step for :class:`GetScalarsAtom`
+
+        Parameters
+        ----------
+        reps_all_levels : :class:`list` of :class:`SO3Vec`
+            List of covariant atom features at each level
+
+        Returns
+        -------
+        scalars : :class:`torch.Tensor`
+            Invariant scalar atom features constructed from ``reps_all_levels``
+        """
+
+        reps = cat(reps_all_levels)
+        individual_reps = [torch.cat(ri[..., 0], ri[..., 1], dim=reps.cdim) for ri in reps]
+        all_reps = torch.cat([ri for ri in reps])
+        return all_reps
+
+        # scalars = reps[0]
+
+        # if self.full_scalars:
+        #     scalars_tr  = [(sign*part*part.flip(-2)).sum(dim=(-1, -2), keepdim=True) for part, sign in zip(reps, self.signs_tr)]
+        #     scalars_mag = [(part*part).sum(dim=(-1, -2), keepdim=True) for part in reps]
+
+        #     scalars_full = [torch.cat([s_tr, s_mag], dim=-1) for s_tr, s_mag in zip(scalars_tr, scalars_mag)]
+
+        #     scalars = [scalars] + scalars_full
+
+        #     scalars = torch.cat(scalars, dim=-3)
+
+
 ############# Output of network #############
 
 class OutputLinear(nn.Module):
@@ -108,7 +184,7 @@ class OutputLinear(nn.Module):
         self.num_scalars = num_scalars
         self.bias = bias
 
-        self.lin = nn.Linear(2*num_scalars, 1, bias=bias)
+        self.lin = nn.Linear(num_scalars, 1, bias=bias)
         self.lin.to(device=device, dtype=dtype)
 
         self.zero = torch.tensor(0, dtype=dtype, device=device)
@@ -232,7 +308,7 @@ class OutputEdgeLinear(nn.Module):
         super(OutputEdgeLinear, self).__init__()
 
         self.num_channels_in = num_channels_in
-        self.lin = nn.Linear(2 * num_channels_in, num_out, bias=bias).to(device=device, dtype=dtype)
+        self.lin = nn.Linear(num_channels_in, num_out, bias=bias).to(device=device, dtype=dtype)
         self.zero = torch.tensor(0, device=device, dtype=dtype)
 
     def forward(self, edge_scalars, edge_mask):
