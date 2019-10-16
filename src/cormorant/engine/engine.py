@@ -262,6 +262,9 @@ class Engine:
             else:
                 targets = self._get_target(data, self.stats)
                 predict = self.model(data)
+            print(self.remove_nonzero)
+            print(targets.shape)
+            print(predict.shape)
 
             # Calculate loss and backprop
             loss = self.loss_fn(predict, targets)
@@ -279,6 +282,8 @@ class Engine:
             self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
 
             self.minibatch += 1
+        print([p.shape for p in all_predict])
+        print([p.shape for p in all_targets])
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 

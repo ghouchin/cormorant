@@ -1,13 +1,8 @@
-import torch
 import torch.nn as nn
+import logging
 
 from cormorant.models import CormorantAtomLevel, CormorantEdgeLevel
-
-from cormorant.nn import MaskLevel, DotMatrix
-from cormorant.nn import CatMixReps
-from cormorant.cg_lib import CGProduct, CGModule
-
-import logging
+from cormorant.cg_lib import CGModule
 
 
 class CormorantCG(CGModule):

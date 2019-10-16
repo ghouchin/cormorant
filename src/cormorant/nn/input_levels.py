@@ -79,7 +79,6 @@ class InputLinear(nn.Module):
         return SO3Tau([self.channels_out])
 
 
-
 class InputMPNN(nn.Module):
     """
     Module to create rotationally invariant atom feature vectors

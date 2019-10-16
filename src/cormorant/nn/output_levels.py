@@ -2,7 +2,9 @@ import torch
 import torch.nn as nn
 
 from cormorant.nn import BasicMLP
+from cormorant.nn.position_levels import RadPolyTrig
 from cormorant.so3_lib import cat
+
 
 ############# Get Scalars #############
 
@@ -337,10 +339,6 @@ class OutputEdgeLinear(nn.Module):
         prediction : pytorch tensor
             Predicted values on the edges.  Of size b x N x N x num_out.
         """
-        # Reshape scalars appropriately
-        es = edge_scalars.shape
-        # edge_scalars = edge_scalars.view(es[0:3] + (self.num_channels_in * 2,))
-
         # First MLP applied to each atom
         x = self.lin(edge_scalars)
 
