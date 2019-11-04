@@ -120,18 +120,28 @@ def setup_shared_args(parser):
     # Computation options
     parser.add_argument('--cuda', dest='cuda', action='store_true',
                         help='Use CUDA (default)')
+    parser.add_argument('--num-workers', type=int, default=1,
+                        help='Set number of workers in dataloader. (Default: 1)')
+    parser.add_argument('--no-edge-in', dest='use_edge_in', action='store_false')
+    parser.add_argument('--no-edge-dot', dest='use_edge_dot', action='store_false')
+    parser.add_argument('--no-pos-funcs', dest='use_pos_funcs', action='store_false')
+    parser.add_argument('--no-ag', dest='use_ag', action='store_false')
+    parser.add_argument('--no-sq', dest='use_sq', action='store_false')
+    parser.add_argument('--no-id', dest='use_id', action='store_false')
     parser.add_argument('--no-cuda', '--cpu', dest='cuda', action='store_false',
                         help='Use CPU')
-    parser.set_defaults(cuda=True)
-
     parser.add_argument('--float', dest='dtype', action='store_const', const='float',
                         help='Use floats.')
     parser.add_argument('--double', dest='dtype', action='store_const', const='double',
                         help='Use doubles.')
+    parser.set_defaults(use_edge_in=True)
+    parser.set_defaults(use_edge_dot=True)
+    parser.set_defaults(use_pos_funcs=True)
+    parser.set_defaults(use_ag=True)
+    parser.set_defaults(use_sq=True)
+    parser.set_defaults(use_id=True)
+    parser.set_defaults(cuda=True)
     parser.set_defaults(dtype='float')
-
-    parser.add_argument('--num-workers', type=int, default=1,
-                        help='Set number of workers in dataloader. (Default: 1)')
 
     # Model options
     parser.add_argument('--num-cg-levels', type=int, default=4, metavar='N',
