@@ -75,7 +75,7 @@ class CormorantEdgeLevel(CGModule):
         self.use_edge_dot = use_edge_dot
         self.use_pos_funcs = use_pos_funcs
 
-    def forward(self, edge_in, atom_reps, pos_funcs, base_mask, norms):
+    def forward(self, edge_in, atom_reps, pos_funcs, base_mask, norms, sq_norms):
         # Concatenate and mix the different types of edge features together
         edge_features = []
         if self.use_edge_in:
@@ -90,7 +90,7 @@ class CormorantEdgeLevel(CGModule):
         edge_mix = self.cat_mix(edge_features)
 
         # Apply mask to layer -- For now, only can be done after mixing.
-        edge_net = self.mask_layer(edge_mix, base_mask, norms)
+        edge_net = self.mask_layer(edge_mix, base_mask, norms, sq_norms)
 
         return edge_net
 
