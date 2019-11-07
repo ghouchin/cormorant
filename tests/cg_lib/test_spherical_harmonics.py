@@ -13,8 +13,8 @@ from utils import complex_from_numpy
 class TestSphericalHarmonics():
 
     # Compare with SciyPy
-    @pytest.mark.parametrize('maxl', range(3))
-    @pytest.mark.parametrize('batch', [(1,), (2,), (5,), (1, 1), (2, 1), (1, 2), (1, 1, 1), (2, 2, 2), (2, 3, 3)])
+    @pytest.mark.parametrize('maxl', [0, 2])
+    @pytest.mark.parametrize('batch', [(1,), (5,), (1, 1), (2, 1), (1, 2), (1, 1, 1), (2, 3, 3)])
     @pytest.mark.parametrize('conj', [True, False])
     def test_spherical_harmonics_vs_scipy(self, maxl, batch, conj):
         cg_dict = CGDict(maxl=maxl, dtype=torch.double)
@@ -29,10 +29,10 @@ class TestSphericalHarmonics():
             assert torch.allclose(part1, part2)
 
     # Compare with SciyPy
-    @pytest.mark.parametrize('maxl', range(3))
-    @pytest.mark.parametrize('batch', [(1,), (2,), (5,), (1, 1), (2, 1), (1, 2), (1, 1, 1), (2, 2, 2), (2, 3, 3)])
-    @pytest.mark.parametrize('natoms1', [1, 2, 5])
-    @pytest.mark.parametrize('natoms2', [1, 2, 5])
+    @pytest.mark.parametrize('maxl', [0, 2])
+    @pytest.mark.parametrize('batch', [(1,), (2,), (5,), (1, 1), (2, 1), (1, 2), (1, 1, 1), (2, 3, 3)])
+    @pytest.mark.parametrize('natoms1', [1, 5])
+    @pytest.mark.parametrize('natoms2', [1, 5])
     @pytest.mark.parametrize('conj', [True, False])
     def test_spherical_rel_harmonics_vs_scipy(self, maxl, batch, natoms1, natoms2, conj):
         cg_dict = CGDict(maxl=maxl, dtype=torch.double)
@@ -40,9 +40,10 @@ class TestSphericalHarmonics():
         pos1 = torch.rand(batch + (natoms1, 3), dtype=torch.double)
         pos2 = torch.rand(batch + (natoms2, 3), dtype=torch.double)
 
-        sh, norms = spherical_harmonics_rel(cg_dict, pos1, pos2, maxl, conj=conj, sh_norm='qm')
+        sh, norms, norms_sq = spherical_harmonics_rel(cg_dict, pos1, pos2, maxl, conj=conj, sh_norm='qm')
 
         sh_sp, norms_sp = sph_harms_rel_from_scipy(pos1, pos2, maxl, conj=conj)
+        norms_sq_sp = norms_sp**2
 
         for l, (part1, part2) in enumerate(zip(sh, sh_sp)):
             if l == 0:
@@ -50,6 +51,7 @@ class TestSphericalHarmonics():
             assert torch.allclose(part1, part2)
 
         assert torch.allclose(norms, norms_sp)
+        assert torch.allclose(norms_sq, norms_sq_sp)
 
 
 def sph_harms_rel_from_scipy(pos1, pos2, maxl, conj=False):
