@@ -102,15 +102,16 @@ class OutputLinear(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, num_scalars, bias=True, device=None, dtype=torch.float):
+    def __init__(self, num_scalars, num_output=1, bias=True, device=None, dtype=torch.float, squeeze_output=True):
         if device is None:
             device = torch.device('cpu')
         super(OutputLinear, self).__init__()
 
         self.num_scalars = num_scalars
         self.bias = bias
+        self.squeeze_output = squeeze_output
 
-        self.lin = nn.Linear(2*num_scalars, 1, bias=bias)
+        self.lin = nn.Linear(2*num_scalars, num_output, bias=bias)
         self.lin.to(device=device, dtype=dtype)
 
         self.zero = torch.tensor(0, dtype=dtype, device=device)
@@ -135,8 +136,9 @@ class OutputLinear(nn.Module):
         atom_scalars = atom_scalars.view((s[0], s[1], -1)).sum(1)  # No masking needed b/c summing over atoms
 
         predict = self.lin(atom_scalars)
-
-        predict = predict.squeeze(-1)
+        
+        if self.squeeze_output:
+            predict = predict.squeeze(-1)
 
         return predict
 
