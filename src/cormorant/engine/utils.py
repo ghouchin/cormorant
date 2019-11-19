@@ -131,7 +131,9 @@ def init_optimizer(args, model):
 
     optim_type = args.optim.lower()
 
-    if optim_type == 'adam':
+    if optim_type == 'adamw':
+        optimizer = optim.AdamW(params, amsgrad=False)
+    elif optim_type == 'adam':
         optimizer = optim.Adam(params, amsgrad=False)
     elif optim_type == 'amsgrad':
         optimizer = optim.Adam(params, amsgrad=True)
