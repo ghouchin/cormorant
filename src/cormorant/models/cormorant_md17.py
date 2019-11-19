@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 
 import logging
 
@@ -36,8 +35,6 @@ class CormorantMD17(CGModule):
         Device to initialize the level to
     dtype : :class:`torch.torch.dtype`
         Data type to initialize the level to level to
-    dummy_torch_obj: :class:`torch.Tensor`
-        Object created for testing external links.
     cg_dict : :class:`CGDict <cormorant.cg_lib.CGDict>`
         Clebsch-gordan dictionary object.
     """
@@ -69,7 +66,7 @@ class CormorantMD17(CGModule):
         super().__init__(maxl=max(maxl+max_sh), device=device, dtype=dtype, cg_dict=cg_dict)
         device, dtype, cg_dict = self.device, self.dtype, self.cg_dict
 
-        print('CGDICT', cg_dict.maxl)
+        logging.info('CGdict maxl: {}'.format(cg_dict.maxl))
 
         self.num_cg_levels = num_cg_levels
         self.num_channels = num_channels
@@ -97,10 +94,11 @@ class CormorantMD17(CGModule):
         tau_in_edge = self.input_func_edge.tau
 
         self.cormorant_cg = CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
-                     tau_pos, num_cg_levels, num_channels, level_gain, weight_init,
-                     cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
-                     cat=True, gaussian_mask=False,
-                     device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
+                                        tau_pos, num_cg_levels, num_channels,
+                                        level_gain, weight_init, cutoff_type,
+                                        hard_cut_rad, soft_cut_rad, soft_cut_width,
+                                        cat=True, gaussian_mask=gaussian_mask,
+                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
 
         tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
         tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
@@ -117,7 +115,7 @@ class CormorantMD17(CGModule):
         self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
-            sum([p.nelement() for p in self.parameters()])))
+            sum(p.nelement() for p in self.parameters())))
 
     def forward(self, data, covariance_test=False):
         """
@@ -139,16 +137,16 @@ class CormorantMD17(CGModule):
         atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions = self.prepare_input(data)
 
         # Calculate spherical harmonics and radial functions
-        spherical_harmonics, norms = self.sph_harms(atom_positions, atom_positions)
+        spherical_harmonics, norms, sq_norms = self.sph_harms(atom_positions, atom_positions)
         rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
-        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
-        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
+        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
+        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
 
         # Clebsch-Gordan layers central to the network
         atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
-                                                 rad_func_levels, norms, spherical_harmonics)
+                                                 rad_func_levels, norms, sq_norms, spherical_harmonics)
 
         # Construct scalars for network output
         atom_scalars = self.get_scalars_atom(atoms_all)
@@ -200,6 +198,7 @@ class CormorantMD17(CGModule):
         edge_scalars = torch.tensor([])
 
         return atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions
+
 
 def expand_var_list(var, num_cg_levels):
     if type(var) is list:

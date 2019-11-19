@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-from cormorant.so3_lib import SO3Scalar
 
 class MaskLevel(nn.Module):
     """
@@ -34,7 +33,9 @@ class MaskLevel(nn.Module):
         Data type to instantite the module to.
     """
     def __init__(self, num_channels, hard_cut_rad, soft_cut_rad, soft_cut_width, cutoff_type,
-                 gaussian_mask=False, eps=1e-3, device=torch.device('cpu'), dtype=torch.float):
+                 gaussian_mask=False, eps=1e-3, device=None, dtype=torch.float):
+        if device is None:
+            device = torch.device('cpu')
         super(MaskLevel, self).__init__()
 
         self.gaussian_mask = gaussian_mask
@@ -67,7 +68,7 @@ class MaskLevel(nn.Module):
         self.zero = torch.tensor(0, device=device, dtype=dtype)
         self.eps = torch.tensor(eps, device=device, dtype=dtype)
 
-    def forward(self, edge_net, edge_mask, norms):
+    def forward(self, edge_net, edge_mask, norms, sq_norms):
         """
         Forward pass for :class:`MaskLevel`
 
@@ -95,7 +96,8 @@ class MaskLevel(nn.Module):
             cut_rad = torch.max(self.eps, self.soft_cut_rad.abs())
 
             if self.gaussian_mask:
-                edge_mask = edge_mask * torch.exp(-(norms.unsqueeze(-1)/cut_rad).pow(2))
+                # edge_mask = edge_mask * torch.exp(-(norms.unsqueeze(-1)/cut_rad).pow(2))
+                edge_mask = edge_mask * torch.exp(-(sq_norms.unsqueeze(-1)/cut_rad.pow(2)))
             else:
                 edge_mask = edge_mask * torch.sigmoid((cut_rad - norms.unsqueeze(-1))/cut_width)
 

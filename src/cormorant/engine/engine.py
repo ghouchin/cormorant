@@ -1,5 +1,5 @@
-import torch
 import logging
+import torch
 import os
 from datetime import datetime
 from math import sqrt, inf, ceil
@@ -97,7 +97,7 @@ class Engine:
 
             logging.info('Best loss from checkpoint: {} at epoch {}'.format(self.best_loss, self.epoch))
 
-    def evaluate(self, splits=['train', 'valid', 'test'], best=True, final=True):
+    def evaluate(self, splits=None, best=True, final=True):
         """
         Evaluate model on training/validation/testing splits.
 
@@ -105,6 +105,8 @@ class Engine:
         :best: Evaluate best model as determined by minimum validation error over evolution
         :final: Evaluate final model at end of training phase
         """
+        if splits is None:
+            splits = ['train', 'valid', 'test']
         if not self.args.save:
             logging.info('No model saved! Cannot give final status.')
             return
@@ -134,7 +136,6 @@ class Engine:
             for split in splits:
                 predict, targets = self.predict(split)
                 self.log_predict(predict, targets, split, description='Best')
-
         logging.info('Inference phase complete!')
 
     def _warm_restart(self, epoch):
@@ -241,8 +242,6 @@ class Engine:
     def train_epoch(self):
         dataloader = self.dataloaders['train']
 
-        # current_idx = 0
-        # num_data_pts = len(dataloader.dataset)
         self.mae, self.rmse, self.batch_time = 0, 0, 0
         all_predict, all_targets = [], []
 
@@ -282,8 +281,6 @@ class Engine:
             self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
 
             self.minibatch += 1
-        print([p.shape for p in all_predict])
-        print([p.shape for p in all_targets])
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
@@ -332,10 +329,10 @@ class Engine:
 
         if epoch >= 0:
             suffix = 'final'
-            logging.info('Epoch: {} Complete! {} {} Loss: {:10.4f} {:10.4f}   w/units: {:10.4f} {:10.4f}'.format(epoch+1, description, datastrings[dataset], mae, rmse, mae_units, rmse_units))
+            logging.info('Epoch: {} Complete! {} {} Loss: {:8.4f} {:8.4f}   w/units: {:8.4f} {:8.4f}'.format(epoch+1, description, datastrings[dataset], mae, rmse, mae_units, rmse_units))
         else:
             suffix = 'best'
-            logging.info('Training Complete! {} {} Loss: {:10.4f} {:10.4f}   w/units: {:10.4f} {:10.4f}'.format(description, datastrings[dataset], mae, rmse, mae_units, rmse_units))
+            logging.info('Training Complete! {} {} Loss: {:8.4f} {:8.4f}   w/units: {:8.4f} {:8.4f}'.format(description, datastrings[dataset], mae, rmse, mae_units, rmse_units))
 
         if self.args.predict:
             file = self.args.predictfile + '.' + suffix + '.' + dataset + '.pt'

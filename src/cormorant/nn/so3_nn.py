@@ -1,6 +1,5 @@
 from torch.nn import Module
 from functools import reduce
-
 from cormorant.cg_lib import CGModule
 from cormorant.so3_lib import so3_torch, SO3Weight, SO3Tau
 
@@ -103,7 +102,7 @@ class CatReps(Module):
         self.taus_in = taus_in = [SO3Tau(tau) for tau in taus_in if tau]
 
         if maxl is None:
-            maxl = max([tau.maxl for tau in taus_in])
+            maxl = max(tau.maxl for tau in taus_in)
         self.maxl = maxl
 
         self.tau_out = reduce(lambda x, y: x & y, taus_in)[:self.maxl+1]

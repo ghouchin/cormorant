@@ -9,7 +9,7 @@ from cormorant.so3_lib import cat
 ############# Get Scalars #############
 
 class GetScalarsAtom(nn.Module):
-    """
+    r"""
     Construct a set of scalar feature vectors for each atom by using the
     covariant atom :class:`SO3Vec` representations at various levels.
 
@@ -26,13 +26,15 @@ class GetScalarsAtom(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, tau_levels, full_scalars=True, device=torch.device('cpu'), dtype=torch.float):
+    def __init__(self, tau_levels, full_scalars=True, device=None, dtype=torch.float):
+        if device is None:
+            device = torch.device('cpu')
         super().__init__()
 
         self.device = device
         self.dtype = dtype
 
-        self.maxl = max([len(tau) for tau in tau_levels]) - 1
+        self.maxl = max(len(tau) for tau in tau_levels) - 1
 
         signs_tr = [torch.pow(-1, torch.arange(-m, m+1.)) for m in range(self.maxl+1)]
         signs_tr = [torch.stack([s, -s], dim=-1) for s in signs_tr]
@@ -48,8 +50,6 @@ class GetScalarsAtom(nn.Module):
         else:
             self.num_scalars = sum(split_l0)
             self.split = split_l0
-
-        print('Number of scalars at top:', self.num_scalars)
 
     def forward(self, reps_all_levels):
         """
@@ -71,7 +71,7 @@ class GetScalarsAtom(nn.Module):
         scalars = reps[0]
 
         if self.full_scalars:
-            scalars_tr  = [(sign*part*part.flip(-2)).sum(dim=(-1, -2), keepdim=True) for part, sign in zip(reps, self.signs_tr)]
+            scalars_tr = [(sign*part*part.flip(-2)).sum(dim=(-1, -2), keepdim=True) for part, sign in zip(reps, self.signs_tr)]
             scalars_mag = [(part*part).sum(dim=(-1, -2), keepdim=True) for part in reps]
 
             scalars_full = [torch.cat([s_tr, s_mag], dim=-1) for s_tr, s_mag in zip(scalars_tr, scalars_mag)]
@@ -183,13 +183,17 @@ class OutputLinear(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, num_scalars, num_out=1, bias=True, device=torch.device('cpu'), dtype=torch.float):
+    def __init__(self, num_scalars, num_output=1, bias=True, device=None, dtype=torch.float, squeeze_output=True):
+        if device is None:
+            device = torch.device('cpu')
         super(OutputLinear, self).__init__()
 
         self.num_scalars = num_scalars
         self.bias = bias
+        self.squeeze_output = squeeze_output
 
-        self.lin = nn.Linear(num_scalars, num_out, bias=bias)
+        # self.lin = nn.Linear(num_scalars, num_out, bias=bias)
+        self.lin = nn.Linear(2*num_scalars, num_output, bias=bias)
         self.lin.to(device=device, dtype=dtype)
 
         self.zero = torch.tensor(0, dtype=dtype, device=device)
@@ -214,8 +218,9 @@ class OutputLinear(nn.Module):
         atom_scalars = atom_scalars.view((s[0], s[1], -1)).sum(1)  # No masking needed b/c summing over atoms
 
         predict = self.lin(atom_scalars)
-
-        predict = predict.squeeze(-1)
+        
+        if self.squeeze_output:
+            predict = predict.squeeze(-1)
 
         return predict
 
@@ -243,7 +248,9 @@ class OutputPMLP(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, num_scalars, num_mixed=64, activation='leakyrelu', device=torch.device('cpu'), dtype=torch.float):
+    def __init__(self, num_scalars, num_mixed=64, activation='leakyrelu', device=None, dtype=torch.float):
+        if device is None:
+            device = torch.device('cpu')
         super(OutputPMLP, self).__init__()
 
         self.num_scalars = num_scalars
