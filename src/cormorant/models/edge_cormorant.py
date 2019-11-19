@@ -190,16 +190,16 @@ class EdgeCormorant(CGModule):
         atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions = self.prepare_input(data)
 
         # Calculate spherical harmonics and radial functions
-        spherical_harmonics, norms = self.sph_harms(atom_positions, atom_positions)
+        spherical_harmonics, norms, sq_norms = self.sph_harms(atom_positions, atom_positions)
         rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
-        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
-        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
+        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
+        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
 
         # Clebsch-Gordan layers central to the network
         atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
-                                                 rad_func_levels, norms, spherical_harmonics)
+                                                 rad_func_levels, norms, sq_norms, spherical_harmonics)
         edge_scalars = self.get_scalars_edge(edges_all)
 
         prediction = self.output_layer_edge(edge_scalars, edge_mask)

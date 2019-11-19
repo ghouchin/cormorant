@@ -124,7 +124,7 @@ class GetScalarsEdge(nn.Module):
         #     self.num_scalars = sum(split_l0)
         #     self.split = split_l0
 
-        print('Number of scalars at top:', self.num_scalars)
+        # print('Number of scalars at top:', self.num_scalars)
 
     def forward(self, reps_all_levels):
         """
@@ -319,7 +319,7 @@ class OutputEdgeLinear(nn.Module):
     def __init__(self, num_channels_in, num_out=1, bias=True, device=torch.device('cpu'), dtype=torch.float):
         super(OutputEdgeLinear, self).__init__()
 
-        print('num out in init', num_out)
+        # print('num out in init', num_out)
 
         self.num_channels_in = num_channels_in
         self.lin = nn.Linear(num_channels_in, num_out, bias=bias).to(device=device, dtype=dtype)

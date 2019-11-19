@@ -261,9 +261,9 @@ class Engine:
             else:
                 targets = self._get_target(data, self.stats)
                 predict = self.model(data)
-            print(self.remove_nonzero)
-            print(targets.shape)
-            print(predict.shape)
+            # print(self.remove_nonzero)
+            # print(targets.shape)
+            # print(predict.shape)
 
             # Calculate loss and backprop
             loss = self.loss_fn(predict, targets)
