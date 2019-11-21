@@ -45,7 +45,7 @@ class CormorantMD17(CGModule):
                  top, input, num_mpnn_layers, activation='leakyrelu',
                  device=None, dtype=None, cg_dict=None,
                  use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
-                 use_ag=True, use_sq=True, use_id=True):
+                 use_ag=True, use_sq=True, use_id=True, rad_func_type='old'):
 
         logging.info('Initializing network!')
         level_gain = expand_var_list(level_gain, num_cg_levels)
@@ -81,8 +81,16 @@ class CormorantMD17(CGModule):
                                                device=device, dtype=dtype, cg_dict=cg_dict)
 
         # Set up position functions, now independent of spherical harmonics
-        self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
-                                       device=self.device, dtype=self.dtype)
+        # self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
+        #                               device=self.device, dtype=self.dtype)
+        if rad_func_type == 'paulinet':
+            from dlqmc.nn.electrocormorant import  PNetRadialFilter
+            from dlqmc.nn.base import DistanceBasis
+            dist_object = DistanceBasis(32)
+            self.rad_funcs = PNetRadialFilter(max_sh, dist_object, num_cg_levels, device=self.device, dtype=self.dtype)
+        else:
+            self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
+                                           device=self.device, dtype=self.dtype)
         tau_pos = self.rad_funcs.tau
 
         num_scalars_in = self.num_species * (self.charge_power + 1)
