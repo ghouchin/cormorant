@@ -70,7 +70,6 @@ class CormorantQM9(CGModule):
         device, dtype, cg_dict = self.device, self.dtype, self.cg_dict
 
         logging.info('CGdict maxl: {}'.format(cg_dict.maxl))
-
         self.num_cg_levels = num_cg_levels
         self.num_channels = num_channels
         self.charge_power = charge_power

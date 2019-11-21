@@ -142,7 +142,7 @@ class CatReps(Module):
 
 class CatMixReps(CGModule):
     """
-    Module to concatenate mix a list of representation representations using
+    Module to concatenate a list of representations using
     :obj:`cormorant.nn.CatReps`, and then linearly mix them using
     :obj:`cormorant.nn.MixReps`.
 

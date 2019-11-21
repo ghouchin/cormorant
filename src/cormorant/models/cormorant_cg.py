@@ -1,5 +1,5 @@
-import logging
 import torch.nn as nn
+import logging
 
 from cormorant.models import CormorantAtomLevel, CormorantEdgeLevel
 from cormorant.cg_lib import CGModule
