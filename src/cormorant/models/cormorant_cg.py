@@ -96,6 +96,7 @@ class CormorantCG(CGModule):
             edge_net = edge_level(edge_net, atom_reps, rad_funcs[idx], edge_mask, norms, sq_norms)
             edge_reps = edge_net * sph_harm[:max_sh+1]
             atom_reps = atom_level(atom_reps, edge_reps, atom_mask)
+            print(atom_reps.shapes)
 
             atoms_all.append(atom_reps)
             edges_all.append(edge_net)

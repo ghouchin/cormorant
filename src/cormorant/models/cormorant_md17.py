@@ -86,7 +86,7 @@ class CormorantMD17(CGModule):
         if rad_func_type == 'paulinet':
             from dlqmc.nn.electrocormorant import  PNetRadialFilter
             from dlqmc.nn.base import DistanceBasis
-            dist_object = DistanceBasis(32)
+            dist_object = DistanceBasis(32).to(device=self.device)
             self.rad_funcs = PNetRadialFilter(max_sh, dist_object, num_cg_levels, device=self.device, dtype=self.dtype)
         else:
             self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
