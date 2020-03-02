@@ -10,23 +10,24 @@ class ASEInterface(Calculator):
     def __init__(self, model, included_species):
         Calculator.__init__(self)
         self.model = model
-        self.included_species = included_species
+        self.included_species = torch.tensor(included_species)
 
     @classmethod
     def load(cls, filename, num_species, included_species):
         saved_run = torch.load(filename)
         args = saved_run['args']
+        charge_scale=max(included_species)
 
         # Initialize device and data type
-        device, dtype = init_cuda(args)
+        device, dtype = init_cuda(args.cuda,args.dtype)
         model = CormorantQM9(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
                              args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                              args.weight_init, args.level_gain, args.charge_power, args.basis_set,
-                             args.charge_scale, args.gaussian_mask,
+                             charge_scale, args.gaussian_mask,
                              args.top, args.input, args.num_mpnn_levels,
                              device=device, dtype=dtype)
         model.load_state_dict(saved_run['model_state'])
-        calc = cls(model)
+        calc = cls(model,  included_species)
         return calc
 
     def calculate(self, atoms, properties, system_changes):
@@ -70,7 +71,10 @@ class ASEInterface(Calculator):
         atom_positions = torch.tensor(atom_positions).unsqueeze(0)
         data['charges'] = atom_charges
         data['positions'] = atom_positions
+        print(data['positions'].shape)
+        print(data['charges'].shape)
         data['atom_mask'] = torch.ones(atom_charges.shape).bool()
-        data['edge_mask '] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
-        data['one_hot'] = self.data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
+        data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
+        data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
+        print(data['one_hot'].shape)
         return data

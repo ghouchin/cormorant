@@ -1,1 +1,1 @@
-from cormorant.ase_interface import ASEInterface
+from cormorant.ase.ase_interface import ASEInterface
