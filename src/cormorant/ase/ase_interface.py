@@ -7,12 +7,13 @@ import torch
 class ASEInterface(Calculator):
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model):
+    def __init__(self, model, included_species):
         Calculator.__init__(self)
         self.model = model
+        self.included_species = included_species
 
     @classmethod
-    def load(cls, filename, num_species):
+    def load(cls, filename, num_species, included_species):
         saved_run = torch.load(filename)
         args = saved_run['args']
 
@@ -28,11 +29,6 @@ class ASEInterface(Calculator):
         calc = cls(model)
         return calc
 
-    def train(self, trainer):
-        trainer.load_checkpoint()
-        self.trainer = trainer
-        self.trainer.train()
-
     def calculate(self, atoms, properties, system_changes):
         """
         Populates results dictionary.
@@ -44,35 +40,37 @@ class ASEInterface(Calculator):
         properties : list of strings
             Properties to calculate.
         system_changes : list
-            list of what has changed.     
+            list of what has changed.
         """
         Calculator.calculate(self, atoms)
 
-        corm_input = convert_atoms(atoms)
-        energy = model(corm_input)
+        corm_input = self.convert_atoms(atoms)
+        energy = self.model(corm_input)
         if 'forces' in properties:
-            forces = self._get_forces(energy)
-         
+            forces = self._get_forces(energy, corm_input)
+
         self.results['forces'] = forces
         self.results['energy'] = energy
 
-    def _get_forces(self, energy):
+    def _get_forces(self, energy, batch):
         forces = []
         # Grad must be called for each predicted energy in the batch
         for i, pred in enumerate(energy):
-            chunk_forces = -torch.autograd.grad(pred, sample_batch['positions'], create_graph=True, retain_graph=True)[0]
+            chunk_forces = -torch.autograd.grad(pred, batch['positions'], create_graph=True, retain_graph=True)[0]
             forces.append(chunk_forces[i])
         return torch.stack(forces, dim=0)
 
-
-
-    def convert_atoms(self,atoms):
+    def convert_atoms(self, atoms):
         data = {}
         atom_charges, atom_positions = [], []
-        for i, line in enumerate(datoms.positions):
+        for i, line in enumerate(atoms.positions):
             atom_charges.append(atoms.numbers[i])
             atom_positions.append(list(line))
+        atom_charges = torch.tensor(atom_charges).unsqueeze(0)
+        atom_positions = torch.tensor(atom_positions).unsqueeze(0)
         data['charges'] = atom_charges
-        data['positions'] = atoms_positions
+        data['positions'] = atom_positions
+        data['atom_mask'] = torch.ones(atom_charges.shape).bool()
+        data['edge_mask '] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
         data['one_hot'] = self.data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data
