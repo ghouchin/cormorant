@@ -19,10 +19,10 @@ def main():
     # Initialize dataloader
     datadir = "/home/erik/My_Source_Codes/cormorant/examples/data/"
     ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test,
-                                                                       datadir, 'md17', subtract_thermo=False,
-                                                                       force_download=args.force_download,
-                                                                       subset='uracil'
-                                                                       )
+                                                                            datadir, 'md17', subtract_thermo=False,
+                                                                            force_download=args.force_download,
+                                                                            subset='uracil'
+                                                                            )
     args.num_train, args.num_valid, args.num_test = ntr, nv, nte
 
     # Construct PyTorch dataloaders from datasets
@@ -54,12 +54,37 @@ def main():
                                      num_workers=args.num_workers,
                                      collate_fn=collate_fn)
                    for split, dataset in datasets.items()}
-    
+
     # Apply the covariance and permutation invariance tests.
     cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
     sample_batch = next(iter(dataloaders['train']))
-    predict = model(sample_batch) 
-    print(predict)
+
+    optimizer.zero_grad()
+
+    sample_batch['positions'].requires_grad_() # Need gradients on the positions
+    predict = model(sample_batch)
+    forces = []
+    # Grad must be called for each predicted energy in the batch
+    for i, pred in enumerate(predict):
+        chunk_forces = -torch.autograd.grad(pred, sample_batch['positions'], create_graph=True, retain_graph=True)[0]
+        forces.append(chunk_forces[i])
+    forces = torch.stack(forces, dim=0)
+
+    # Normalize forces by stdev of energy
+    normed_forces = sample_batch['forces'] / datasets['train'].stats['energies'][1]
+    
+    print("Ratio of predicted to true force for configuration 0")
+    print(forces[0] / normed_forces[0])
+    print("Ratio of predicted to true force for configuration 1")
+    print(forces[1] / normed_forces[1])
+    print('calculate difference and optimize')
+    loss_fn = torch.nn.functional.mse_loss(forces, normed_forces)
+    loss_fn.backward()
+    optimizer.step()
+
+
+
+
 
 
 
