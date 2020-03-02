@@ -3,9 +3,9 @@ import os
 
 from cormorant.data.prepare.md17 import download_dataset_md17
 from cormorant.data.prepare.qm9 import download_dataset_qm9
+from cormorant.data.prepare.ase import download_dataset_ase
 
-
-def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, force_download=False):
+def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, force_download=False, name=None, path=None):
     """
     Download and process dataset.
 
@@ -24,7 +24,12 @@ def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, fo
         Clean up files created while preparing the data.
     force_download : bool, optional
         If true, forces a fresh download of the dataset.
-
+    name : str, optional                                                                                                              
+        If given, this is the name of the folder where the data will be stored for ase-db.                                                       
+        Does nothing for other datasets.  
+    paht : str, optional
+        If given, this is the path to the ase-db that is being loaded.
+        Does nothing for other datasets.
     Returns
     -------
     datafiles : dict of strings
@@ -38,6 +43,8 @@ def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, fo
     # If datasets have subsets,
     if subset:
         dataset_dir = [datadir, dataset, subset]
+    elif name:
+        dataset_dir = [datadir, dataset, name]
     else:
         dataset_dir = [datadir, dataset]
 
@@ -73,6 +80,8 @@ def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, fo
         elif dataset.lower().startswith('md17'):
             download_dataset_md17(datadir, dataset, subset,
                                   splits, cleanup=cleanup)
+        elif dataset.lower().startswith('ase-db'):
+            download_dataset_ase(datadir, dataset, name, path, splits, cleanup=cleanup)
         else:
             raise ValueError(
                 'Incorrect choice of dataset! Must chose qm9/md17!')

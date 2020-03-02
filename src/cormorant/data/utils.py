@@ -10,7 +10,7 @@ from cormorant.data.prepare import prepare_dataset
 
 
 def initialize_datasets(args, datadir, dataset, subset=None, splits=None,
-                        force_download=False, subtract_thermo=False):
+                        force_download=False, subtract_thermo=False, db_name=None, db_path=None):
     """
     Initialize datasets.
 
@@ -32,6 +32,14 @@ def initialize_datasets(args, datadir, dataset, subset=None, splits=None,
     subtract_thermo : bool, optional
         If True, subtracts the thermochemical energy of the atoms from each molecule in GDB9.
         Does nothing for other datasets.
+    db-name : str, optional
+        If given, this is the name of the folder where the data will be stored. 
+        This will always be args.db-name if using ase-db but is shown here for clarity. 
+        Does nothing for other datasets. 
+    db-path : str, optional
+        If given, this is the path to the ase-db that is being loaded.
+        This will always be args.db-path if using ase-db but is shown here for clarity.
+        Does nothing for other datasets.  
 
     Returns
     -------
@@ -55,7 +63,7 @@ def initialize_datasets(args, datadir, dataset, subset=None, splits=None,
 
     # Download and process dataset. Returns datafiles.
     datafiles = prepare_dataset(
-        datadir, dataset, subset, splits, force_download=force_download)
+        datadir, dataset, subset, splits, force_download=force_download, name=db_name, path=db_path)
 
     # Load downloaded/processed datasets
     datasets = {}

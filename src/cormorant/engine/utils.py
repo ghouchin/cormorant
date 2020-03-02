@@ -98,14 +98,17 @@ def init_file_paths(args):
             args.subset = 'uracil'
         if not args.target:
             args.target = 'energies'
+    elif args.dataset.startswith('ase-db'):
+        if not args.target:
+            args.target = 'energy'
     else:
-        raise ValueError('Dataset must be qm9 or md17!')
+        raise ValueError('Dataset must be qm9 or md17 or an ASE Database!')
 
     logger.info('Initializing simulation based upon argument string:')
     logger.info(' '.join([arg for arg in sys.argv]))
     logger.info('Log, best, checkpoint, load files: {} {} {} {}'.format(args.logfile, args.bestfile, args.checkfile, args.loadfile))
     logger.info('Dataset, learning target, datadir: {} {} {}'.format(args.dataset, args.target, args.datadir))
-    _git_version()
+    #_git_version() #why is this needed? Breaks when on backend because there is not internet.
 
     if args.seed < 0:
         seed = int((datetime.now().timestamp())*100000)
@@ -173,16 +176,17 @@ def init_scheduler(args, optimizer):
 
 #### Other initialization ####
 
-def _git_version():
-    from subprocess import run, PIPE
-    git_commit = run('git log --pretty=%h -n 1'.split(), stdout=PIPE)
-    logger.info('Git status: {}'.format(git_commit.stdout.decode()))
+#def _git_version():
+#    from subprocess import run, PIPE
+#    git_commit = run('git log --pretty=%h -n 1'.split(), stdout=PIPE)
+#    logger.info('Git status: {}'.format(git_commit.stdout.decode()))
 
 def init_cuda(args):
     if args.cuda:
         assert(torch.cuda.is_available()), "No CUDA device available!"
         logger.info('Beginning training on CUDA/GPU! Device: {}'.format(torch.cuda.current_device()))
         torch.cuda.init()
+        torch.cuda.empty_cache()
         device = torch.device('cuda')
     else:
         logger.info('Beginning training on CPU!')

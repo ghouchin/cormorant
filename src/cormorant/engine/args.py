@@ -208,6 +208,11 @@ def setup_argparse(dataset):
     elif dataset == "qm9":
         parser.add_argument('--subtract-thermo', action=BoolArg, default=True,
                             help='Subtract thermochemical energy from relvant learning targets in QM9 dataset.')
+    elif dataset == "ase-db":
+        parser.add_argument('--db_name', '--db', type=str, default='db',
+                            help='Name of the ASE Database to load without the extention.')
+        parser.add_argument('--db_path', type=str, default='',
+                            help='Location of the ASE Database to load')
     else:
         raise ValueError("Dataset is not recognized")
     return parser

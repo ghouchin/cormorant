@@ -15,6 +15,10 @@ from cormorant.data.utils import initialize_datasets
 
 from cormorant.data.collate import collate_fn
 
+#This is a script adopted from train_qm9.py to train user input data from as ASE Database!
+
+
+
 # This makes printing tensors more readable.
 torch.set_printoptions(linewidth=1000, threshold=100000)
 
@@ -23,7 +27,7 @@ logger = logging.getLogger('')
 def main():
 
     # Initialize arguments -- Just
-    args = init_argparse('qm9')
+    args = init_argparse('ase-db')
 
     # Initialize file paths
     args = init_file_paths(args)
@@ -37,14 +41,15 @@ def main():
     import pdb
     pdb.set_trace()
     # Initialize dataloader
-    args, datasets, num_species, charge_scale = initialize_datasets(args, args.datadir, 'qm9', subtract_thermo=args.subtract_thermo,
+
+    args, datasets, num_species, charge_scale = initialize_datasets(args, args.datadir, 'ase-db', db_name=args.db_name, db_path=args.db_path,
                                                                     force_download=args.force_download
                                                                     )
 
-    qm9_to_eV = {'U0': 27.2114, 'U': 27.2114, 'G': 27.2114, 'H': 27.2114, 'zpve': 27211.4, 'gap': 27.2114, 'homo': 27.2114, 'lumo': 27.2114}
+    #qm9_to_eV = {'U0': 27.2114, 'U': 27.2114, 'G': 27.2114, 'H': 27.2114, 'zpve': 27211.4, 'gap': 27.2114, 'homo': 27.2114, 'lumo': 27.2114}
 
-    for dataset in datasets.values():
-        dataset.convert_units(qm9_to_eV)
+    #for dataset in datasets.values():
+    #    dataset.convert_units(qm9_to_eV)
 
     # Construct PyTorch dataloaders from datasets
     dataloaders = {split: DataLoader(dataset,
@@ -69,8 +74,8 @@ def main():
     # Define a loss function. Just use L2 loss for now.
     loss_fn = torch.nn.functional.mse_loss
 
-    # Apply the covariance and permutation invariance tests.
-    cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
+    ## Apply the covariance and permutation invariance tests.
+    #cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
     trainer = Engine(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
