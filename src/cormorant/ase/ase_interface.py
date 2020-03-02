@@ -16,10 +16,10 @@ class ASEInterface(Calculator):
     def load(cls, filename, num_species, included_species):
         saved_run = torch.load(filename)
         args = saved_run['args']
-        charge_scale=max(included_species)
+        charge_scale = max(included_species)
 
         # Initialize device and data type
-        device, dtype = init_cuda(args.cuda,args.dtype)
+        device, dtype = init_cuda(args.cuda, args.dtype)
         model = CormorantQM9(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
                              args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                              args.weight_init, args.level_gain, args.charge_power, args.basis_set,
@@ -27,7 +27,7 @@ class ASEInterface(Calculator):
                              args.top, args.input, args.num_mpnn_levels,
                              device=device, dtype=dtype)
         model.load_state_dict(saved_run['model_state'])
-        calc = cls(model,  included_species)
+        calc = cls(model, included_species)
         return calc
 
     def calculate(self, atoms, properties, system_changes):
@@ -46,18 +46,22 @@ class ASEInterface(Calculator):
         Calculator.calculate(self, atoms)
 
         corm_input = self.convert_atoms(atoms)
+        # Grad must be called for each predicted energy in the corm_input
+        if not corm_input['positions'].requires_grad and 'forces' in properties:
+            corm_input['positions'].requires_grad_()
+
         energy = self.model(corm_input)
+        self.results['energy'] = energy
+
         if 'forces' in properties:
             forces = self._get_forces(energy, corm_input)
-
-        self.results['forces'] = forces
-        self.results['energy'] = energy
+            self.results['forces'] = forces
 
     def _get_forces(self, energy, batch):
         forces = []
-        # Grad must be called for each predicted energy in the batch
+
         for i, pred in enumerate(energy):
-            chunk_forces = -torch.autograd.grad(pred, batch['positions'], create_graph=True, retain_graph=True)[0]
+            chunk_forces = -torch.autograd.grad(energy, batch['positions'], create_graph=True, retain_graph=True)[0]
             forces.append(chunk_forces[i])
         return torch.stack(forces, dim=0)
 
@@ -71,10 +75,7 @@ class ASEInterface(Calculator):
         atom_positions = torch.tensor(atom_positions).unsqueeze(0)
         data['charges'] = atom_charges
         data['positions'] = atom_positions
-        print(data['positions'].shape)
-        print(data['charges'].shape)
         data['atom_mask'] = torch.ones(atom_charges.shape).bool()
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
         data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
-        print(data['one_hot'].shape)
         return data
