@@ -190,11 +190,12 @@ def spherical_harmonics_rel(cg_dict, pos1, pos2, maxsh, normalize=True, conj=Fal
     """
     rel_pos = pos1.unsqueeze(-2) - pos2.unsqueeze(-3)
     rel_norms = rel_pos.norm(dim=-1, keepdim=True)
+    rel_sq_norms = rel_pos.pow(2).sum(dim=-1, keepdim=True)
 
     rel_sph_harm = spherical_harmonics(cg_dict, rel_pos, maxsh, normalize=normalize,
                                        conj=conj, sh_norm=sh_norm)
 
-    return rel_sph_harm, rel_norms.squeeze(-1)
+    return rel_sph_harm, rel_norms.squeeze(-1), rel_sq_norms.squeeze(-1)
 
 
 def pos_to_rep(pos, conj=False):
@@ -220,11 +221,12 @@ def pos_to_rep(pos, conj=False):
 
     # Only the y coordinates get mapped to imaginary terms
     if conj:
-        pos_y *= -1
-
-    pos_m = torch.stack([pos_x, -pos_y], -1)/sqrt(2.)
+        pos_m = torch.stack([pos_x, pos_y], -1)/sqrt(2.)
+        pos_p = torch.stack([-pos_x, pos_y], -1)/sqrt(2.)
+    else:
+        pos_m = torch.stack([pos_x, -pos_y], -1)/sqrt(2.)
+        pos_p = torch.stack([-pos_x, -pos_y], -1)/sqrt(2.)
     pos_0 = torch.stack([pos_z, torch.zeros_like(pos_z)], -1)
-    pos_p = torch.stack([-pos_x, -pos_y], -1)/sqrt(2.)
 
     psi1 = torch.stack([pos_m, pos_0, pos_p], dim=-2).unsqueeze(-3)
 
@@ -261,7 +263,7 @@ def rep_to_pos(rep):
     pos_z = rep_0
 
     imag_part = [pos_x[..., 1].abs().mean(), pos_y[..., 0].abs().mean(), pos_z[..., 1].abs().mean()]
-    if (any([p > 1e-6 for p in imag_part])):
+    if (any(p > 1e-6 for p in imag_part)):
         raise ValueError('Imaginary part not zero! {}'.format(imag_part))
 
     pos = torch.stack([pos_x[..., 0], pos_y[..., 1], pos_z[..., 0]], dim=-1)
