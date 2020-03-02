@@ -48,7 +48,7 @@ class ASEInterface(Calculator):
         """
         Calculator.calculate(self, atoms)
 
-        corm_input = convert_atoms_to_input(atoms)
+        corm_input = convert_atoms(atoms)
         energy = model(corm_input)
         if 'forces' in properties:
             forces = self._get_forces(energy)
@@ -63,3 +63,16 @@ class ASEInterface(Calculator):
             chunk_forces = -torch.autograd.grad(pred, sample_batch['positions'], create_graph=True, retain_graph=True)[0]
             forces.append(chunk_forces[i])
         return torch.stack(forces, dim=0)
+
+
+
+    def convert_atoms(self,atoms):
+        data = {}
+        atom_charges, atom_positions = [], []
+        for i, line in enumerate(datoms.positions):
+            atom_charges.append(atoms.numbers[i])
+            atom_positions.append(list(line))
+        data['charges'] = atom_charges
+        data['positions'] = atoms_positions
+        data['one_hot'] = self.data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
+        return data
