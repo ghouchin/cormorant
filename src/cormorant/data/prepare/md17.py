@@ -33,6 +33,7 @@ def download_dataset_md17(datadir, dataname, subset, splits=None, cleanup=True):
         md17_molecule = md17_subsets[subset]
 
     # Define directory for which data will be output.
+    print(datadir, dataname, subset)
     md17dir = join(*[datadir, dataname, subset])
 
     # Important to avoid a race condition

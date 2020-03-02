@@ -46,18 +46,18 @@ def init_argparse(dataset):
     return args
 
 
-def init_logger(args):
-    if args.logfile:
-        handlers = [logging.FileHandler(args.logfile, mode='w'), logging.StreamHandler()]
+def init_logger(logfile, log_level):
+    if logfile:
+        handlers = [logging.FileHandler(logfile, mode='w'), logging.StreamHandler()]
     else:
         handlers = [logging.StreamHandler()]
 
-    if args.log_level.lower() == 'debug':
+    if log_level.lower() == 'debug':
         loglevel = logging.DEBUG
-    elif args.log_level.lower() == 'info':
+    elif log_level.lower() == 'info':
         loglevel = logging.INFO
     else:
-        ValueError('Inappropriate choice of logging_level. {}'.format(args.logging_level))
+        ValueError('Inappropriate choice of logging_level. {}'.format(log_level))
 
     logging.basicConfig(level=loglevel,
                         format='%(message)s',
@@ -135,15 +135,34 @@ def logging_printout(args):
 #### Initialize optimizer ####
 
 
-def init_optimizer(args, model):
+def init_optimizer(model, optim_type, lr_init, weight_decay):
+    """
+    Convenience function for initializing the optimizer.
 
-    params = {'params': model.parameters(), 'lr': args.lr_init, 'weight_decay': args.weight_decay}
+    Parameters
+    ----------
+    model : pytorch module
+        model to be trained
+    optim : string
+        Optimizer to use.
+    lr_init : float
+        Initial learning rate
+    weight_decay :  ???
+        Weight decay
+    
+    Returns
+    -------
+    optimizer : pytorch optimizer
+        Optimizer for the model
+    """
+
+    params = {'params': model.parameters(), 'lr': lr_init, 'weight_decay': weight_decay}
     params = [params]
 
-    optim_type = args.optim.lower()
+    optim_type = optim_type.lower()
 
     if optim_type == 'adam':
-        optimizer = optim.Adam(params, amsgrad=False)
+        optimizer = optim.AdamW(params, amsgrad=False)
     elif optim_type == 'amsgrad':
         optimizer = optim.Adam(params, amsgrad=True)
     elif optim_type == 'rmsprop':
@@ -191,8 +210,8 @@ def init_scheduler(args, optimizer):
     return scheduler, restart_epochs
 
 
-def init_cuda(args):
-    if args.cuda:
+def init_cuda(cuda, dtype):
+    if cuda:
         assert(torch.cuda.is_available()), 'No CUDA device available!'
         logger.info('Beginning training on CUDA/GPU! Device: {}'.format(torch.cuda.current_device()))
         torch.cuda.init()
@@ -202,9 +221,9 @@ def init_cuda(args):
         logger.info('Beginning training on CPU!')
         device = torch.device('cpu')
 
-    if args.dtype == 'double':
+    if dtype == 'double':
         dtype = torch.double
-    elif args.dtype == 'float':
+    elif dtype == 'float':
         dtype = torch.float
     else:
         raise ValueError('Incorrect data type chosen!')

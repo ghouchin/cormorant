@@ -6,15 +6,19 @@ from cormorant.data.dataset import ProcessedDataset
 from cormorant.data.prepare import prepare_dataset
 
 
-def initialize_datasets(args, datadir, dataset, subset=None, splits=None,
+def initialize_datasets(num_train, num_valid, num_test, datadir, dataset, subset=None, splits=None,
                         force_download=False, subtract_thermo=False, db_name=None, db_path=None):
     """
     Initialize datasets.
 
     Parameters
     ----------
-    args : dict
-        Dictionary of input arguments detailing the cormorant calculation.
+    num_train: int
+        Number of training points to use
+    num_valid: int
+        Number of validation points to use
+    num_testing: int
+        Number of testing points to use
     datadir : str
         Path to the directory where the data and calculations and is, or will be, stored.
     dataset : str
@@ -55,8 +59,8 @@ def initialize_datasets(args, datadir, dataset, subset=None, splits=None,
     TODO: Delete the splits argument.
     """
     # Set the number of points based upon the arguments
-    num_pts = {'train': args.num_train,
-               'test': args.num_test, 'valid': args.num_valid}
+    num_pts = {'train': num_train,
+               'test': num_test, 'valid': num_valid}
 
     # Download and process dataset. Returns datafiles.
     datafiles = prepare_dataset(
@@ -92,11 +96,11 @@ def initialize_datasets(args, datadir, dataset, subset=None, splits=None,
     max_charge = datasets['train'].max_charge
 
     # Now, update the number of training/test/validation sets in args
-    args.num_train = datasets['train'].num_pts
-    args.num_valid = datasets['valid'].num_pts
-    args.num_test = datasets['test'].num_pts
+    num_train = datasets['train'].num_pts
+    num_valid = datasets['valid'].num_pts
+    num_test = datasets['test'].num_pts
 
-    return args, datasets, num_species, max_charge
+    return num_train, num_valid, num_test, datasets, num_species, max_charge
 
 
 def _get_species(datasets, ignore_check=False):

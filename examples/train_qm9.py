@@ -20,6 +20,7 @@ torch.set_printoptions(linewidth=1000, threshold=100000)
 
 logger = logging.getLogger('')
 
+
 def main():
 
     # Initialize arguments -- Just
@@ -29,20 +30,22 @@ def main():
     args = init_file_paths(args)
 
     # Initialize logger
-    init_logger(args)
+    init_logger(args.logfile, args.log_level)
 
     # Write input paramaters and paths to log
     logging_printout(args)
 
     # Initialize device and data type
-    device, dtype = init_cuda(args)
+    device, dtype = init_cuda(args.cuda, args.dtype)
 
     import pdb
     pdb.set_trace()
     # Initialize dataloader
-    args, datasets, num_species, charge_scale = initialize_datasets(args, args.datadir, 'qm9', subtract_thermo=args.subtract_thermo,
-                                                                    force_download=args.force_download
-                                                                    )
+    ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test,
+                                                                       args.datadir, 'qm9', subtract_thermo=args.subtract_thermo,
+                                                                       force_download=args.force_download
+                                                                       )
+    args.num_train, args.num_valid, args.num_test = ntr, nv, nte
 
     qm9_to_eV = {'U0': 27.2114, 'U': 27.2114, 'G': 27.2114, 'H': 27.2114, 'zpve': 27211.4, 'gap': 27.2114, 'homo': 27.2114, 'lumo': 27.2114}
 
@@ -66,7 +69,7 @@ def main():
                         device=device, dtype=dtype)
 
     # Initialize the scheduler and optimizer
-    optimizer = init_optimizer(args, model)
+    optimizer = init_optimizer(model, args.optim, args.lr_init, args.weight_decay)
     scheduler, restart_epochs = init_scheduler(args, optimizer)
 
     # Define a loss function. Just use L2 loss for now.
