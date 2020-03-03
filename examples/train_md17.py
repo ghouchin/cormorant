@@ -26,20 +26,24 @@ def main():
     args = init_argparse('md17')
 
     # Initialize file paths
-    args = init_file_paths(args)
+    args = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir,
+                           args.logfile, args.bestfile, args.loadfile, args.predictfile)
+    args = set_dataset_defaults(args)
 
     # Initialize logger
-    init_logger(args)
+    init_logger(args.logfile, args.log_level)
 
     # Write input paramaters and paths to log
     logging_printout(args)
 
     # Initialize device and data type
-    device, dtype = init_cuda(args)
+    device, dtype = init_cuda(args.cuda, args.dtype)
 
     # Initialize dataloader
-    args, datasets, num_species, charge_scale = initialize_datasets(args, args.datadir, args.dataset, subset=args.subset,
-                                                                    force_download=args.force_download)
+    ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test,
+                                                                            args.datadir, args.dataset, subset=args.subset,
+                                                                            force_download=args.force_download)
+    args.num_train, args.num_valid, args.num_test = ntr, nv, nte
 
     # Construct PyTorch dataloaders from datasets
     dataloaders = {split: DataLoader(dataset,
@@ -59,7 +63,9 @@ def main():
 
     # Initialize the scheduler and optimizer
     optimizer = init_optimizer(args, model)
-    scheduler, restart_epochs = init_scheduler(args, optimizer)
+    scheduler, restart_epochs = init_scheduler(optimizer, args.lr_init, args.lr_final, args.lr_decay,
+                                               args.num_epoch, args.num_train, args.batch_size, args.sgd_restart,
+                                               lr_minibatch=args.lr_minibatch, lr_decay_type=args.lr_decay_type)
 
     # Define a loss function. Just use L2 loss for now.
     loss_fn = torch.nn.functional.mse_loss

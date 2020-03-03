@@ -27,7 +27,9 @@ def main():
     args = init_argparse('qm9')
 
     # Initialize file paths
-    args = init_file_paths(args)
+    args = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir,
+                           args.logfile, args.bestfile, args.loadfile, args.predictfile)
+    args = set_dataset_defaults(args)
 
     # Initialize logger
     init_logger(args.logfile, args.log_level)
@@ -42,9 +44,8 @@ def main():
     pdb.set_trace()
     # Initialize dataloader
     ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test,
-                                                                       args.datadir, 'qm9', subtract_thermo=args.subtract_thermo,
-                                                                       force_download=args.force_download
-                                                                       )
+                                                                            args.datadir, 'qm9', subtract_thermo=args.subtract_thermo,
+                                                                            force_download=args.force_download)
     args.num_train, args.num_valid, args.num_test = ntr, nv, nte
 
     qm9_to_eV = {'U0': 27.2114, 'U': 27.2114, 'G': 27.2114, 'H': 27.2114, 'zpve': 27211.4, 'gap': 27.2114, 'homo': 27.2114, 'lumo': 27.2114}
@@ -70,7 +71,9 @@ def main():
 
     # Initialize the scheduler and optimizer
     optimizer = init_optimizer(model, args.optim, args.lr_init, args.weight_decay)
-    scheduler, restart_epochs = init_scheduler(args, optimizer)
+    scheduler, restart_epochs = init_scheduler(optimizer, args.lr_init, args.lr_final, args.lr_decay,
+                                               args.num_epoch, args.num_train, args.batch_size, args.sgd_restart,
+                                               lr_minibatch=args.lr_minibatch, lr_decay_type=args.lr_decay_type)
 
     # Define a loss function. Just use L2 loss for now.
     loss_fn = torch.nn.functional.mse_loss

@@ -62,6 +62,15 @@ def main():
     optimizer.zero_grad()
 
     sample_batch['positions'].requires_grad_() # Need gradients on the positions
+    
+    print(sample_batch.keys())
+    print(sample_batch['positions'].shape, "positions")
+    print(sample_batch['charges'].shape, "charges")
+    print(sample_batch['one_hot'].shape, "one_hot")
+    print(sample_batch['atom_mask'].shape, "atom_mask")
+    print(sample_batch['atom_mask'].type(), "atom_mask")
+    print(sample_batch['atom_mask'].bool().type(), "atom_mask")
+
     predict = model(sample_batch)
     forces = []
     # Grad must be called for each predicted energy in the batch
