@@ -18,7 +18,7 @@ import numpy as np
 class ASEInterface(Calculator):
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model, included_species):
+    def __init__(self, model=None, included_species=[]):
         Calculator.__init__(self)
         self.model = model
         self.included_species = torch.tensor(included_species)
@@ -172,6 +172,9 @@ class ASEInterface(Calculator):
         # Probably should add more consistency checks, such as number of datapoints, etc...
         if all(datafiles_checks):
             logging.info('Dataset exists and is processed.')
+        elif all(not x for x in datafiles_checks):
+            # If checks are failed.
+            new_download = True
         else:
             raise ValueError('All dataset files not found!  Make sure everything is in place.')
 
