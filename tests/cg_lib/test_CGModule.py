@@ -7,7 +7,7 @@ from cormorant.cg_lib import CGModule, CGDict
 
 devices = [torch.device('cpu')]
 if torch.cuda.is_available():
-    devices.append([torch.device('cuda')])
+    devices.append(torch.device('cuda'))
 
 
 class TestCGModule():
@@ -92,7 +92,7 @@ class TestCGModule():
         cg_mod.to(device=device2)
         assert cg_mod.device == device2
         assert cg_mod.cg_dict.device == device2
-        assert all([t.device == device2 for t in cg_mod.cg_dict.values()])
+        assert all([t.device.type == device2.type for t in cg_mod.cg_dict.values()])
 
     # Check that the module and cg_dict's data types can be moved correctly with standard .to() syntax.
     @pytest.mark.parametrize('dtype1', [torch.half, torch.float, torch.double])
@@ -100,7 +100,6 @@ class TestCGModule():
     @pytest.mark.parametrize('device1', devices)
     @pytest.mark.parametrize('device2', devices)
     def test_cg_mod_to(self, dtype1, dtype2, device1, device2):
-
         cg_mod = CGModule(maxl=1, dtype=dtype1, device=device1)
 
         cg_mod.to(device2, dtype2)
@@ -109,7 +108,7 @@ class TestCGModule():
         assert all([t.dtype == dtype2 for t in cg_mod.cg_dict.values()])
         assert cg_mod.device == device2
         assert cg_mod.cg_dict.device == device2
-        assert all([t.device == device2 for t in cg_mod.cg_dict.values()])
+        assert all([t.device.type == device2.type for t in cg_mod.cg_dict.values()])
 
     # Check that .half() work as expected
     @pytest.mark.parametrize('dtype', [None, torch.half, torch.float, torch.double])
@@ -169,7 +168,7 @@ class TestCGModule():
         cg_mod.cuda()
         assert cg_mod.device == torch.device('cuda')
         assert cg_mod.cg_dict.device == torch.device('cuda')
-        assert all([t.device == torch.device('cuda') for t in cg_mod.cg_dict.values()])
+        assert all([t.device.type == torch.device('cuda').type for t in cg_mod.cg_dict.values()])
 
     def test_register_parameter(self):
         class BasicCGModule(CGModule):
