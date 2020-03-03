@@ -8,7 +8,7 @@ from cormorant.so3_lib import SO3Tau
 
 devices = [torch.device('cpu')]
 if torch.cuda.is_available():
-    devices.append([torch.device('cuda')])
+    devices.append(torch.device('cuda'))
 
 # Test CG Product Initialization
 
@@ -125,7 +125,7 @@ class TestCGProductInheritedFromCGModule():
         cg_prod.to(device=device2)
         assert cg_prod.device == device2
         assert cg_prod.cg_dict.device == device2
-        assert all([t.device == device2 for t in cg_prod.cg_dict.values()])
+        assert all([t.device.type == device2.type for t in cg_prod.cg_dict.values()])
 
     # Check that the module and cg_dict's data types can be moved correctly with standard .to() syntax.
     @pytest.mark.parametrize('dtype1', [torch.half, torch.float, torch.double])
@@ -143,7 +143,7 @@ class TestCGProductInheritedFromCGModule():
         assert all([t.dtype == dtype2 for t in cg_prod.cg_dict.values()])
         assert cg_prod.device == device2
         assert cg_prod.cg_dict.device == device2
-        assert all([t.device == device2 for t in cg_prod.cg_dict.values()])
+        assert all([t.device.type == device2.type for t in cg_prod.cg_dict.values()])
 
         # Check that .half() work as expected
         @pytest.mark.parametrize('dtype', [None, torch.half, torch.float, torch.double])
