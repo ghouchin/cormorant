@@ -135,7 +135,8 @@ def init_file_paths(prefix, workdir, modeldir, logdir, predictdir, logfile=None,
     if not os.path.exists(predictdir):
         logger.warning('Prediction directory {} does not exist. Creating!'.format(predictdir))
         os.mkdir(predictdir)
-    return prefix, workdir, modeldir, logdir, predictdir
+    # return prefix, workdir, modeldir, logdir, predictdir
+    return logfile, bestfile, checkfile, loadfile, predictfile
 
 
 def set_dataset_defaults(args):

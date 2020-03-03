@@ -30,21 +30,21 @@ def main():
     args = init_argparse('ase-db')
 
     # Initialize file paths
-    args = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir,
-                           args.logfile, args.bestfile, args.loadfile, args.predictfile)
+    all_files = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir, args.logfile, args.bestfile, args.checkfile, args.loadfile, args.predictfile)
+    print(all_files)
+    print(len(all_files))
+    logfile, bestfile, checkfile, loadfile, predictfile = all_files
     args = set_dataset_defaults(args)
 
     # Initialize logger
-    init_logger(args.logfile, args.log_level)
+    init_logger(logfile, args.log_level)
 
     # Initialize device and data type
     device, dtype = init_cuda(args.cuda, args.dtype)
 
-    import pdb
-    pdb.set_trace()
     # Initialize dataloader
 
-    ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test, args.datadir, 
+    ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test, args.datadir,
                                                                             'ase-db', db_name=args.db_name, db_path=args.db_path,
                                                                             force_download=args.force_download
                                                                             )
@@ -84,7 +84,11 @@ def main():
     #cormorant_tests(model, dataloaders['train'], args, charge_scale=charge_scale)
 
     # Instantiate the training class
-    trainer = Engine(args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype)
+    trainer = Engine(args, dataloaders, model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
+                     bestfile=bestfile, checkfile=checkfile, num_epoch=args.num_epoch,
+                     num_train=args.num_train, batch_size=args.batch_size, device=device, dtype=dtype,
+                     save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
+                     textlog=args.textlog)
 
     # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
     trainer.load_checkpoint()
