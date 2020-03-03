@@ -288,17 +288,23 @@ def process_db_row(data, forcetrain=False):
 def _process_structure(data):
     num_atoms = data.natoms
 
-    atom_charges, atom_positions, rel_positions = [], [], []
-    for i, ri in enumerate(data.positions):
-        # atom_charges.append(charge_dict[i.symbols[idx]])
-        atom_charges.append(data.numbers[i])
-        atom_positions.append(list(ri))
-    for ri in data.positions:
-        rel_pos = []
-        for rj in data.positions:
-            rij = np.array(ri)-np.array(rj)
-            rel_pos.append(list(mic(rij, data.cell)))
-        rel_positions.append(rel_pos)
+    # atom_charges, atom_positions, rel_positions = [], [], []
+    # for i, ri in enumerate(data.positions):
+    #     atom_charges.append(data.numbers[i])
+    #     atom_positions.append(list(ri))
+    # atom_positions = np.array(atom_positions)
+
+    # for ri in data.positions:
+    #     rel_pos = []
+    #     for rj in data.positions:
+    #         rij = np.array(ri)-np.array(rj)
+    #         rel_pos.append(list(mic(rij, data.cell)))
+    #     rel_positions.append(rel_pos)
+
+    rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
+    rel_positions = torch.from_numpy(rel_positions)
+    atom_positions = torch.from_numpy(data.positions)
+    atom_charges = torch.from_numpy(data.numbers).float()
 
     molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': rel_positions}
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
