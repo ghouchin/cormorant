@@ -5,7 +5,7 @@ from cormorant.engine import init_optimizer, init_scheduler
 from cormorant.engine import Engine
 # from cormorant.data.utils import initialize_datasets
 from cormorant.data.prepare import gen_splits_ase
-from cormorant.data.prepare.process import process_ase, process_db_row
+from cormorant.data.prepare.process import process_ase, process_db_row, _process_structure
 from cormorant.data.collate import collate_fn
 from torch.utils.data import DataLoader
 import torch
@@ -208,16 +208,8 @@ class ASEInterface(Calculator):
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):
-        data = {}
-        atom_charges, atom_positions = [], []
-        for i, line in enumerate(atoms.positions):
-            atom_charges.append(atoms.numbers[i])
-            atom_positions.append(list(line))
-        atom_charges = torch.tensor(atom_charges).unsqueeze(0)
-        atom_positions = torch.tensor(atom_positions).unsqueeze(0)
-        data['charges'] = atom_charges
-        data['positions'] = atom_positions
-        data['atom_mask'] = torch.ones(atom_charges.shape).bool()
+        data = _process_structure(atoms)
+        data['atom_mask'] = torch.ones(data['charges'].shape).bool()
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
         data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data

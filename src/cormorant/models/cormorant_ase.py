@@ -192,7 +192,7 @@ class CormorantASE(CGModule):
         charge_power, charge_scale, device, dtype = self.charge_power, self.charge_scale, self.device, self.dtype
 
         # atom_positions = data['positions'].to(device, dtype)
-        atom_rel_positions = data['rel_pos_vecs'].to(device, dtype)  # relative position vectors
+        atom_rel_positions = data['relative_pos'].to(device, dtype)  # relative position vectors
         one_hot = data['one_hot'].to(device, dtype)
         charges = data['charges'].to(device, dtype)
 

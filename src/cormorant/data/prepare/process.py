@@ -2,12 +2,13 @@ import logging
 import os
 import torch
 import tarfile
+import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 from ase.neighborlist import mic
 
-charge_dict = {'H': 1, 'He':2, 'Li':3, 'Be':4, 'B':5, 'C': 6, 'N': 7, 'O': 8, 'F': 9, 
-               'Ne':10, 'Na':11, 'Mg':12, 'Al':13, 'Si':14, 'P':15, 'S':16, 'Cl':17,
-               'K':19, 'Ca':20, 'Ti':22, 'Mn':25, 'Fe':26, 'Co':27, 'Ni':28, 'Pd':46}
+charge_dict = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9,
+               'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17,
+               'K': 19, 'Ca': 20, 'Ti': 22, 'Mn': 25, 'Fe': 26, 'Co': 27, 'Ni': 28, 'Pd': 46}
 
 
 def split_dataset(data, split_idxs):
@@ -91,7 +92,6 @@ def process_xyz_files(data, process_file_fn, file_ext=None, file_idx_list=None, 
     for file in files:
         with readfile(file) as openfile:
             molecules.append(process_file_fn(openfile))
-
 
     # Check that all molecules have the same set of items in their dictionary:
     props = molecules[0].keys()
@@ -205,6 +205,7 @@ def process_xyz_gdb9(datafile):
 
     return molecule
 
+
 def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, stack=True, forcetrain=False):
     """
     Takes an ase database and apply a predefined data processing script to each
@@ -214,7 +215,7 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, stack=
     Parameters
     ----------
     data : str
-        Complete path to the ASE database. 
+        Complete path to the ASE database.
     process_file_fn : callable
         Function to process atoms. Can be defined externally.
         Must input a file, and output a dictionary of properties, each of which
@@ -223,23 +224,20 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, stack=
     file_ext : str, optional
         Optionally add a file extension if multiple types of files exist.
     file_idx_list : array?????
-        This is the list of the indexes in the split of the database you are processing. 
+        This is the list of the indexes in the split of the database you are processing.
     stack : bool, optional
         ?????
     """
     from ase.db import connect
-    #from ase.io import read
+    # from ase.io import read
     logging.info('Processing ASE database file: {}'.format(data))
-    
-
 
     molecules = []
 
     with connect(data) as db:
         for id in file_idx_list:
-            row=db.get(id=id)
-            molecules.append(process_file_fn(row,forcetrain))
-
+            row = db.get(id=id)
+            molecules.append(process_file_fn(row, forcetrain))
 
     # Check that all molecules have the same set of items in their dictionary:
     props = molecules[0].keys()
@@ -255,8 +253,7 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, stack=
     return molecules
 
 
-
-def process_db_row(data,forcetrain=False):
+def process_db_row(data, forcetrain=False):
     """
     Read an ase-db row and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type.
 
@@ -273,23 +270,9 @@ def process_db_row(data,forcetrain=False):
     Notes
     -----
     """
-    num_atoms = data.natoms
+    molecule = _process_structure(data)
 
-    atom_charges, atom_positions, rel_positions = [], [], []
-    for i, ri in enumerate(data.positions):
-        #atom_charges.append(charge_dict[i.symbols[idx]])
-        atom_charges.append(data.numbers[i])
-        atom_positions.append(list(ri))
-    for ri in data.positions:
-        rel_pos = []
-        for rj in data.positions:
-            rij=np.array(ri)-np.array(rj)
-            rel_pos.append(list(mic(rij,data.cell)))
-        relative_positions.append(rel_pos)
-                
-
-
-    #prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
+    # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
     if forcetrain:
         prop_strings = ['energy', 'forces']
         mol_props = [data.energy, data.forces]
@@ -298,10 +281,25 @@ def process_db_row(data,forcetrain=False):
         mol_props = [data.energy]
 
     mol_props = dict(zip(prop_strings, mol_props))
-
-    molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': relative_positions}
     molecule.update(mol_props)
-    molecule = {key: torch.tensor(val) for key, val in molecule.items()}
-
     return molecule
-    
+
+
+def _process_structure(data):
+    num_atoms = data.natoms
+
+    atom_charges, atom_positions, rel_positions = [], [], []
+    for i, ri in enumerate(data.positions):
+        # atom_charges.append(charge_dict[i.symbols[idx]])
+        atom_charges.append(data.numbers[i])
+        atom_positions.append(list(ri))
+    for ri in data.positions:
+        rel_pos = []
+        for rj in data.positions:
+            rij = np.array(ri)-np.array(rj)
+            rel_pos.append(list(mic(rij, data.cell)))
+        rel_positions.append(rel_pos)
+
+    molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': rel_positions}
+    molecule = {key: torch.tensor(val) for key, val in molecule.items()}
+    return molecule
