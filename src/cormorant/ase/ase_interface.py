@@ -190,11 +190,10 @@ class ASEInterface(Calculator):
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):
-        #THIS ONLY WORKS IF WE ARE PASSING A DB ROW, NOT AN ATOMS OBJECT!
         data = _process_structure(atoms)
-        data['atom_mask'] = torch.ones(data['charges'].shape).bool()
+        data['atom_mask'] = torch.ones(data['charges'].unsqueeze(0).shape).bool()
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
-        data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
+        data['one_hot'] = data['charges'].unsqueeze(0).unsqueeze(-1) #== self.included_species.unsqueeze(0).unsqueeze(0)
         return data
 
 

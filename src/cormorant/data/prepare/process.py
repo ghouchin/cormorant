@@ -236,8 +236,8 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, forcet
 
     with connect(data) as db:
         for id in file_idx_list:
-            row = db.get(id=id)
-            molecules.append(process_file_fn(row, forcetrain))
+            atoms = db.get_atoms(id=id,attach_calculator=False)
+            molecules.append(process_file_fn(atoms, forcetrain))
 
     # Check that all molecules have the same set of items in their dictionary:
     props = molecules[0].keys()
@@ -275,10 +275,10 @@ def process_db_row(data, forcetrain=False):
     # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
     if forcetrain:
         prop_strings = ['energy', 'forces']
-        mol_props = [data.energy, data.forces]
+        mol_props = [data.get_potential_energy(), data.get_forces()]
     else:
         prop_strings = ['energy']
-        mol_props = [data.energy]
+        mol_props = [data.get_potential_energy()]
 
     mol_props = dict(zip(prop_strings, mol_props))
     molecule.update(mol_props)
@@ -286,8 +286,8 @@ def process_db_row(data, forcetrain=False):
 
 
 def _process_structure(data):
-    num_atoms = data.natoms
-    #num_atoms = data.get_number_of_atoms()
+    #num_atoms = data.natoms
+    num_atoms = data.get_number_of_atoms()
 
     # atom_charges, atom_positions, rel_positions = [], [], []
     # for i, ri in enumerate(data.positions):
