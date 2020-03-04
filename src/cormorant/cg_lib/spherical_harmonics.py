@@ -36,6 +36,7 @@ class SphericalHarmonics(CGModule):
     device : :class:`torch.torch.device`, optional
         Specify the device to initialize the :class:`CGDict`/:class:`CGModule` to
     """
+
     def __init__(self, maxl, normalize=True, conj=False, sh_norm='unit',
                  cg_dict=None, dtype=None, device=None):
 
@@ -103,6 +104,7 @@ class SphericalHarmonicsRel(CGModule):
     device : :class:`torch.torch.device`, optional
         Specify the device to initialize the :class:`CGDict`/:class:`CGModule` to
     """
+
     def __init__(self, maxl, normalize=False, conj=False, sh_norm='unit',
                  cg_dict=None, dtype=None, device=None):
 
@@ -269,3 +271,57 @@ def rep_to_pos(rep):
     pos = torch.stack([pos_x[..., 0], pos_y[..., 1], pos_z[..., 0]], dim=-1)
 
     return pos
+
+
+def rep_to_twotensor(rep):
+    rep0, rep1_m1, rep1_0, rep1_p1, rep2_m2, rep2_m1, rep2_0, rep2_p1, rep2_p2 = rep.unbind(-2)
+
+    r2 = sqrt(2)
+    r3 = sqrt(3)
+    r6 = r2 * r3
+    xx = -rep0[..., 0]/r3 + rep2_m2[..., 0]/2 - rep2_0[..., 0]/r6 + rep2_p2[..., 0]/2
+    xy = rep1_0[..., 1]/r2 + rep2_m2[..., 1]/2 + rep2_p2[..., 1]/2
+    xz = -rep1_m1[..., 0]/2 - rep1_p1[..., 0]/2 + rep2_m1[..., 0]/2 - rep2_p1[..., 0]/2
+    yx = -rep1_0[..., 1]/r2 + rep2_m2[..., 1]/2 + rep2_p2[..., 1]/2
+    yy = -rep0[..., 0]/r3 - rep2_m2[..., 0]/2 - rep2_0[..., 0]/r6 - rep2_p2[..., 0]/2
+    yz = -rep1_m1[..., 1]/2 - rep1_p1[..., 1]/2 + rep2_m1[..., 1]/2 - rep2_p1[..., 1]/2
+
+    zx = rep1_m1[..., 0]/2 + rep1_p1[..., 0]/2 + rep2_m1[..., 0]/2 - rep2_p1[..., 0]/2
+    zy = rep1_m1[..., 1]/2 + rep1_p1[..., 1]/2 + rep2_m1[..., 1]/2 - rep2_p1[..., 1]/2
+    zz = -rep0[..., 0]/r3 + 2*rep2_0[..., 0]/r6
+
+    two_tensor = torch.stack([xx, xy, xz, yx, yy, yz, zx, zy, zz], dim=-1)
+    return two_tensor
+
+
+def twotensor_to_rep(twotensor):
+    xx, xy, xz, yx, yy, yz, zx, zy, zz = twotensor.unbind(-1)
+    r2 = sqrt(2)
+    r3 = sqrt(3)
+    r6 = r2 * r3
+
+    rep0_real = (-xx - yy - zz) / r3
+    rep0 = torch.stack([rep0_real, torch.zeros_like(rep0_real)], -1)
+    rep1_m1_real = -xz + zx
+    rep1_m1_imag = yz - zy
+    rep1_m1 = torch.stack([rep1_m1_real, rep1_m1_imag], -1)/2
+    rep1_0_imag = (-xy + yx) / r2
+    rep1_0 = torch.stack([torch.zeros_like(rep1_0_imag), rep1_0_imag], -1)
+    rep1_p1 = rep1_m1
+
+    rep2_m2_real = xx - yy
+    rep2_m2_imag = - xy - yx
+    rep2_m2 = torch.stack([rep2_m2_real, rep2_m2_imag], -1) / 2
+    rep2_m1_real = xz + zx
+    rep2_m1_imag = -yx - zy
+    rep2_m1 = torch.stack([rep2_m1_real, rep2_m1_imag], -1) / 2
+    rep2_0 = -xx - yy + 2 * zz
+    rep2_0 = torch.stack([rep2_0, torch.zeros_like(rep2_0)], -1) / r6
+    rep2_p1 = torch.stack([rep2_m1_real, rep2_m1_imag], -1) / 2
+    rep2_p2 = rep2_m2
+
+    rep1_all = torch.stack([rep1_m1, rep1_0, rep1_p1], dim=-2)
+    rep1_all = rep1_all.unsqueeze(-3)
+    rep2_all = torch.stack([rep2_m2, rep2_m1, rep2_0, rep2_p1, rep2_p2], dim=-2)
+    rep2_all = rep2_all.unsqueeze(-3)
+    return rep0, rep1_all, rep2_all
