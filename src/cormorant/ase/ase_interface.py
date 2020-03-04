@@ -19,18 +19,16 @@ import numpy as np
 class ASEInterface(Calculator):
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model=None, included_species=None):
+    def __init__(self, model=None):
         Calculator.__init__(self)
         self.model = model
-        if included_species is None:
-            included_species = []
-        self.included_species = torch.tensor(included_species)
 
         self.edge_features = ['relative_pos']
         self.collate_fn = lambda x: collate_fn(x, edge_features=self.edge_features)
 
     @classmethod
-    def load(cls, filename, num_species, included_species):
+    # def load(cls, filename, num_species, included_species=None):
+    def load(cls, filename, num_species):
         saved_run = torch.load(filename)
         args = saved_run['args']
         charge_scale = max(included_species)
@@ -40,7 +38,7 @@ class ASEInterface(Calculator):
         model = CormorantASE(*args, num_species=num_species, charge_scale=charge_scale,
                              device=device, dtype=dtype)
         model.load_state_dict(saved_run['model_state'])
-        calc = cls(model, included_species)
+        calc = cls(model)
         return calc
 
     def train(self, database, workdir=None, force_factor=0., num_epoch=256, lr_init=5.e-4, lr_final=5.e-6, batch_size=20):
@@ -69,7 +67,9 @@ class ASEInterface(Calculator):
 
         # Initialize dataloader
         force_train = (force_factor != 0.)
-        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(args.num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
+        # num_train = args.num_train
+        num_train = 10
+        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
 
         # Construct PyTorch dataloaders from datasets
         dataloaders = {split: DataLoader(dataset,
@@ -132,8 +132,9 @@ class ASEInterface(Calculator):
 
         corm_input = self.convert_atoms(atoms)
         # Grad must be called for each predicted energy in the corm_input
-        if not corm_input['positions'].requires_grad and 'forces' in properties:
-            corm_input['positions'].requires_grad_()
+        if not corm_input['relative_pos'].requires_grad and 'forces' in properties:
+            print('calling force!')
+            corm_input['relative_pos'].requires_grad_()
 
         energy = self.model(corm_input)
         self.results['energy'] = energy
@@ -178,6 +179,7 @@ class ASEInterface(Calculator):
 
         # Convert to Cormorant ProcessedDataset
         num_train, num_valid, num_test, datasets, num_species, max_charge = convert_to_ProcessedDatasets(ase_data, num_pts, subtract_thermo=False)
+        self.included_species = datasets['train'].included_species
 
         return num_train, num_valid, num_test, datasets, num_species, max_charge
 
@@ -185,15 +187,18 @@ class ASEInterface(Calculator):
         forces = []
 
         for i, pred in enumerate(energy):
-            chunk_forces = -torch.autograd.grad(energy, batch['positions'], create_graph=True, retain_graph=True)[0]
+            print(pred.requires_grad)
+            chunk_forces = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
             forces.append(chunk_forces[i])
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):
         data = _process_structure(atoms)
-        data['atom_mask'] = torch.ones(data['charges'].unsqueeze(0).shape).bool()
+        # data['charges'] = data['charges'].unsqueeze(0)
+        data = {key: val.unsqueeze(0) for key, val in data.items()}
+        data['atom_mask'] = torch.ones(data['charges'].shape).bool()
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
-        data['one_hot'] = data['charges'].unsqueeze(0).unsqueeze(-1) #== self.included_species.unsqueeze(0).unsqueeze(0)
+        data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data
 
 
