@@ -9,7 +9,7 @@ from cormorant.models import CormorantMD17
 from cormorant.models.autotest import cormorant_tests
 
 from cormorant.engine import Engine
-from cormorant.engine import init_argparse, init_file_paths, init_logger, logging_printout, init_cuda
+from cormorant.engine import init_argparse, init_file_paths, init_logger, logging_printout, init_cuda, set_dataset_defaults
 from cormorant.engine import init_optimizer, init_scheduler
 from cormorant.data.utils import initialize_datasets
 
@@ -26,8 +26,8 @@ def main():
     args = init_argparse('md17')
 
     # Initialize file paths
-    args = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir,
-                           args.logfile, args.bestfile, args.loadfile, args.predictfile)
+    all_files = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir, args.logfile, args.bestfile, args.checkfile, args.loadfile, args.predictfile)
+    logfile, bestfile, checkfile, loadfile, predictfile = all_files
     args = set_dataset_defaults(args)
 
     # Initialize logger

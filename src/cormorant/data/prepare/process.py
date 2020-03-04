@@ -206,7 +206,7 @@ def process_xyz_gdb9(datafile):
     return molecule
 
 
-def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, stack=True, forcetrain=False):
+def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, forcetrain=False):
     """
     Takes an ase database and apply a predefined data processing script to each
     entry. Data can be stored in a directory, tarfile, or zipfile. An optional
@@ -247,8 +247,8 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, stack=
     molecules = {prop: [mol[prop] for mol in molecules] for prop in props}
 
     # If stacking is desireable, pad and then stack.
-    if stack:
-        molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
+    # if stack:
+    #     molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
 
     return molecules
 
@@ -287,6 +287,7 @@ def process_db_row(data, forcetrain=False):
 
 def _process_structure(data):
     num_atoms = data.natoms
+    #num_atoms = data.get_number_of_atoms()
 
     # atom_charges, atom_positions, rel_positions = [], [], []
     # for i, ri in enumerate(data.positions):

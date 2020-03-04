@@ -43,7 +43,7 @@ class TestASECormorant():
         level_gain = 10
         maxl = max_sh = 2
         data, num_species, charge_scale = sample_batch
-        data['rel_pos_vecs'] = data['positions'].unsqueeze(-2) - data['positions'].unsqueeze(-3)
+        data['relative_pos'] = data['positions'].unsqueeze(-2) - data['positions'].unsqueeze(-3)
 
         num_cg_levels = 3
         hard_cut_rad = 1.

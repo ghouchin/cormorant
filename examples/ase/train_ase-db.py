@@ -31,8 +31,6 @@ def main():
 
     # Initialize file paths
     all_files = init_file_paths(args.prefix, args.workdir, args.modeldir, args.logdir, args.predictdir, args.logfile, args.bestfile, args.checkfile, args.loadfile, args.predictfile)
-    print(all_files)
-    print(len(all_files))
     logfile, bestfile, checkfile, loadfile, predictfile = all_files
     args = set_dataset_defaults(args)
 

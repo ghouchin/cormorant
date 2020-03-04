@@ -54,9 +54,13 @@ class ProcessedDataset(Dataset):
                 data[key] -= data[key + '_thermo'].to(data[key].dtype)
 
         self.included_species = included_species
+        all_one_hot = []
+        for ci in self.data['charges']:
+            one_hot_i = ci.unsqueeze(-1) == included_species.unsqueeze(0)
+            all_one_hot.append(one_hot_i)
+        self.data['one_hot'] = all_one_hot
 
-        self.data['one_hot'] = self.data['charges'].unsqueeze(-1) == included_species.unsqueeze(0).unsqueeze(0)
-
+        # self.data['one_hot'] = self.data['charges'].unsqueeze(-2) == included_species.unsqueeze(0).unsqueeze(0)
         self.num_species = len(included_species)
         self.max_charge = max(included_species)
 
@@ -71,7 +75,15 @@ class ProcessedDataset(Dataset):
             self.perm = None
 
     def calc_stats(self):
-        self.stats = {key: (val.mean(), val.std()) for key, val in self.data.items() if type(val) is torch.Tensor and val.dim() == 1 and val.is_floating_point()}
+        self.stats = {}
+        for key, val in self.data.items():
+            try:
+                val = torch.Tensor(val)
+                if val.dim() == 1 and val.is_floating_point():
+                    self.stats[key] = (val.mean(), val.std())
+            except ValueError:
+                continue
+        # self.stats = {key: (val.mean(), val.std()) for key, val in self.data.items() if type(val) is torch.Tensor and val.dim() == 1 and val.is_floating_point()}
 
     def convert_units(self, units_dict):
         for key in self.data.keys():

@@ -72,7 +72,7 @@ def init_logger(logfile, log_level):
 #     modeldir = args.modeldir
 #     logdir = args.logdir
 #     predictdir = args.predictdir
-# 
+#
 #     if prefix and not args.logfile:
 #         args.logfile = os.path.join(workdir, logdir, prefix+'.log')
 #     if prefix and not args.bestfile:
@@ -83,7 +83,7 @@ def init_logger(logfile, log_level):
 #         args.loadfile = args.checkfile
 #     if prefix and not args.predictfile:
 #         args.predictfile = os.path.join(workdir, predictdir, prefix)
-# 
+#
 #     if not os.path.exists(modeldir):
 #         logger.warning('Model directory {} does not exist. Creating!'.format(modeldir))
 #         os.mkdir(modeldir)
@@ -93,9 +93,9 @@ def init_logger(logfile, log_level):
 #     if not os.path.exists(predictdir):
 #         logger.warning('Prediction directory {} does not exist. Creating!'.format(predictdir))
 #         os.mkdir(predictdir)
-# 
+#
 #     args.dataset = args.dataset.lower()
-# 
+#
 #     if args.dataset.startswith('qm9'):
 #         if not args.target:
 #             args.target = 'U0'
@@ -109,7 +109,7 @@ def init_logger(logfile, log_level):
 #             args.target = 'energy'
 #     else:
 #         raise ValueError('Dataset must be qm9 or md17 or an ASE Database!')
-# 
+#
 #     return args
 
 
@@ -158,7 +158,7 @@ def set_dataset_defaults(args):
 
 
 def logging_printout(args):
-    
+
     # Printouts of various inputs before training (and after logger is initialized with correct logfile path)
     logger.info('Initializing simulation based upon argument string:')
     logger.info(' '.join([arg for arg in sys.argv]))
@@ -175,10 +175,6 @@ def logging_printout(args):
     logger.info('{}'.format(args))
 
 
-
-#### Initialize optimizer ####
-
-
 def init_optimizer(model, optim_type, lr_init, weight_decay):
     """
     Convenience function for initializing the optimizer.
@@ -193,7 +189,7 @@ def init_optimizer(model, optim_type, lr_init, weight_decay):
         Initial learning rate
     weight_decay :  ???
         Weight decay
-    
+
     Returns
     -------
     optimizer : pytorch optimizer
@@ -229,7 +225,6 @@ def init_scheduler(optimizer, lr_init, lr_final, lr_decay, num_epoch, num_train,
     lr_ratio = lr_final/lr_init
 
     lr_bounds = lambda lr, lr_min: min(1, max(lr_min, lr))
-
     if sgd_restart > 0:
         restart_epochs = [(2**k-1) for k in range(1, ceil(log2(num_epoch))+1)]
         lr_hold = restart_epochs[0]

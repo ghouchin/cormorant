@@ -73,7 +73,13 @@ def initialize_datasets(num_train, num_valid, num_test, datadir, dataset, subset
             datasets[split] = {key: torch.from_numpy(
                 val) for key, val in f.items()}
 
+    num_train, num_valid, num_test, datasets, num_species, max_charge = convert_to_ProcessedDatasets(datasets, num_pts, subtract_thermo)
     # Basic error checking: Check the training/test/validation splits have the same set of keys.
+
+    return num_train, num_valid, num_test, datasets, num_species, max_charge
+
+
+def convert_to_ProcessedDatasets(datasets, num_pts, subtract_thermo=False):
     keys = [list(data.keys()) for data in datasets.values()]
     assert all(key == keys[0] for key in keys
                ), 'Datasets must have same set of keys!'
@@ -82,10 +88,12 @@ def initialize_datasets(num_train, num_valid, num_test, datadir, dataset, subset
     all_species = _get_species(datasets, ignore_check=False)
 
     # Now initialize MolecularDataset based upon loaded data
-    datasets = {split: ProcessedDataset(data, num_pts=num_pts.get(
-        split, -1), included_species=all_species, subtract_thermo=subtract_thermo) for split, data in datasets.items()}
-
-    # Now initialize MolecularDataset based upon loaded data
+    new_datasets = {}
+    for split, data in datasets.items():
+        pdset = ProcessedDataset(data, num_pts=num_pts.get(split, -1), included_species=all_species, subtract_thermo=subtract_thermo)
+        new_datasets[split] = pdset
+    datasets = new_datasets
+    # datasets = {split: ProcessedDataset(data, num_pts=num_pts.get(split, -1), included_species=all_species, subtract_thermo=subtract_thermo) for split, data in datasets.items()}
 
     # Check that all datasets have the same included species:
     assert(len(set(tuple(data.included_species.tolist()) for data in datasets.values())) ==
@@ -99,7 +107,6 @@ def initialize_datasets(num_train, num_valid, num_test, datadir, dataset, subset
     num_train = datasets['train'].num_pts
     num_valid = datasets['valid'].num_pts
     num_test = datasets['test'].num_pts
-
     return num_train, num_valid, num_test, datasets, num_species, max_charge
 
 
@@ -124,20 +131,22 @@ def _get_species(datasets, ignore_check=False):
 
     """
     # Get a list of all species in the dataset across all splits
-    all_species = torch.cat([dataset['charges'].unique()
-                             for dataset in datasets.values()]).unique(sorted=True)
+    split_species = {}
+    for key, dataset in datasets.items():
+        charges = dataset['charges']
+        try:
+            unique_charges = charges.unique(sorted=True)
+        except AttributeError:
+            unique_charges_per_item = [ci.unique(sorted=True) for ci in charges]
+            unique_charges = torch.cat(unique_charges_per_item)
+            unique_charges = unique_charges.unique(sorted=True)
+        # If zero charges (padded, non-existent atoms) are included, remove them
+        if unique_charges[0] == 0:
+            unique_charges = unique_charges[1:]
+        split_species[key] = unique_charges
 
-    # Find the unique list of species in each dataset.
-    split_species = {split: species['charges'].unique(
-        sorted=True) for split, species in datasets.items()}
-
-    # If zero charges (padded, non-existent atoms) are included, remove them
-    if all_species[0] == 0:
-        all_species = all_species[1:]
-
-    # Remove zeros if zero-padded charges exst for each split
-    split_species = {split: species[1:] if species[0] == 0
-                     else species for split, species in split_species.items()}
+    all_species = torch.cat([unique_i for unique_i in split_species.values()])
+    all_species = all_species.unique(sorted=True)
 
     # Now check that each split has at least one example of every atomic spcies from the entire dataset.
     if not all(split.tolist() == all_species.tolist() for split in split_species.values()):

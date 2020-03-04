@@ -3,7 +3,7 @@ from cormorant.ase import ASEInterface
 from ase.io import read
 
 calc = ASEInterface()
-calc.train('test_force.db',force_factor=1.)
+calc.train('test_force.db',force_factor=1., num_epoch=1, batch_size=8)
 
 
 
@@ -23,7 +23,6 @@ f_DFT=atoms.get_forces()
 # atoms=read('/home/ghouchin/ClusterExpansion/cifs/LiNiO2.cif')
 
 atoms.set_calculator(calc)
-
 
 print(atoms.get_potential_energy())
 print(atoms.get_forces())

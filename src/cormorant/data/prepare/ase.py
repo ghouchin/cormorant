@@ -48,7 +48,7 @@ def download_dataset_ase(datadir, dataname, name, path, splits=None, calculate_t
     logging.info('Processing/saving complete!')
 
 
-def gen_splits_ase(asedir, path, cleanup=True):
+def gen_splits_ase(path, cleanup=True):
     """
     Generate ASE training/validation/test splits used.
 
@@ -66,10 +66,10 @@ def gen_splits_ase(asedir, path, cleanup=True):
     """
     logging.info('Splits were not specified! Automatically generating.')
 
-    shutil.copy(path,'temp.db')
+    shutil.copy(path, 'temp.db')
     with connect('temp.db') as db:
         Nmols = db.count()
-        index = np.linspace(1,Nmols,Nmols)
+        index = np.linspace(1, Nmols, Nmols)
 
         for i in range(Nmols):
             row=db.get(id=Nmols-i)

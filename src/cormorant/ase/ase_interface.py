@@ -7,6 +7,7 @@ from cormorant.engine import Engine
 from cormorant.data.prepare import gen_splits_ase
 from cormorant.data.prepare.process import process_ase, process_db_row, _process_structure
 from cormorant.data.collate import collate_fn
+from cormorant.data.utils import convert_to_ProcessedDatasets
 from torch.utils.data import DataLoader
 import torch
 import os
@@ -18,10 +19,15 @@ import numpy as np
 class ASEInterface(Calculator):
     implemented_properties = ['energy', 'forces']
 
-    def __init__(self, model=None, included_species=[]):
+    def __init__(self, model=None, included_species=None):
         Calculator.__init__(self)
         self.model = model
+        if included_species is None:
+            included_species = []
         self.included_species = torch.tensor(included_species)
+
+        self.edge_features = ['relative_pos']
+        self.collate_fn = lambda x: collate_fn(x, edge_features=self.edge_features)
 
     @classmethod
     def load(cls, filename, num_species, included_species):
@@ -37,7 +43,7 @@ class ASEInterface(Calculator):
         calc = cls(model, included_species)
         return calc
 
-    def train(self, database, workdir=None, force_factor=0.):
+    def train(self, database, workdir=None, force_factor=0., num_epoch=256, lr_init=5.e-4, lr_final=5.e-6, batch_size=20):
         # This makes printing tensors more readable.
         torch.set_printoptions(linewidth=1000, threshold=100000)
 
@@ -63,33 +69,39 @@ class ASEInterface(Calculator):
 
         # Initialize dataloader
         force_train = (force_factor != 0.)
-        ntr, nv, nte, datasets, num_species, charge_scale = self.initialize_database(args.num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
-
-        args.num_train, args.num_valid, args.num_test = ntr, nv, nte
+        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(args.num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
 
         # Construct PyTorch dataloaders from datasets
         dataloaders = {split: DataLoader(dataset,
-                                         batch_size=args.batch_size,
+                                         batch_size=batch_size,
                                          shuffle=args.shuffle if (split == 'train') else False,
-                                         num_workers=args.num_workers,
-                                         collate_fn=collate_fn)
+                                         # num_workers=args.num_workers,
+                                         num_workers=1,
+                                         collate_fn=self.collate_fn)
                        for split, dataset in datasets.items()}
 
-        model = CormorantASE(*args, device=device, dtype=dtype)
+        # WE SHOULD NOT BE INITIALIZING THE MODEL HERE!!!
+        if self.model is None:
+            self.model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+                                      args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
+                                      args.weight_init, args.level_gain, args.charge_power, args.basis_set,
+                                      max_charge, args.gaussian_mask,
+                                      args.top, args.input, args.num_mpnn_levels,
+                                      device=device, dtype=dtype)
 
         # Initialize the scheduler and optimizer
-        optimizer = init_optimizer(model, args.optim, args.lr_init, args.weight_decay)
-        scheduler, restart_epochs = init_scheduler(optimizer, args.lr_init, args.lr_final, args.lr_decay,
-                                                   args.num_epoch, args.num_train, args.batch_size, args.sgd_restart,
+        optimizer = init_optimizer(self.model, args.optim, lr_init, args.weight_decay)
+        scheduler, restart_epochs = init_scheduler(optimizer, lr_init, lr_final, args.lr_decay,
+                                                   num_epoch, num_train, batch_size, args.sgd_restart,
                                                    lr_minibatch=args.lr_minibatch, lr_decay_type=args.lr_decay_type)
 
         # Define a loss function. Just use L2 loss for now.
         loss_fn = torch.nn.functional.mse_loss
 
         # Instantiate the training class
-        trainer = Engine(args, dataloaders, model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
-                         bestfile=bestfile, checkfile=checkfile, num_epoch=args.num_epoch,
-                         num_train=args.num_train, batch_size=args.batch_size, device=device, dtype=dtype,
+        trainer = Engine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
+                         bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch,
+                         num_train=num_train, batch_size=batch_size, device=device, dtype=dtype,
                          save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
                          textlog=args.textlog)
 
@@ -98,7 +110,7 @@ class ASEInterface(Calculator):
         self.trainer = trainer
 
         # Train model.
-        self.trainer.trainer()
+        self.trainer.train()
 
         # Test predictions on best model and also last checkpointed model.
         self.trainer.evaluate()
@@ -152,55 +164,22 @@ class ASEInterface(Calculator):
 
         """
 
-        # Set the number of points based upon the arguments
-        self.num_pts = {'train': num_train, 'test': num_test, 'valid': num_valid}
-
-        # Download and process dataset. Returns datafiles.
-        # datafiles = prepare_dataset(datadir, dataset, subset, splits, force_download=force_download, name=db_name, path=db_path)
-        label = os.path.splitext(os.path.basename(database))[0]
-        dataset_dir = [datadir, label]
-        split_names = ['train', 'valid', 'test']
-
-        # Assume one data file for each split
-        datafiles = {split: os.path.join(
-            *(dataset_dir + [split + '.npz'])) for split in split_names}
-
-        # Check datafiles exist
-        datafiles_checks = [os.path.exists(datafile)
-                            for datafile in datafiles.values()]
-        # Check if prepared dataset exists, and if not set flag to download below.
-        # Probably should add more consistency checks, such as number of datapoints, etc...
-        if all(datafiles_checks):
-            logging.info('Dataset exists and is processed.')
-        elif all(not x for x in datafiles_checks):
-            # If checks are failed.
-            new_download = True
-        else:
-            raise ValueError('All dataset files not found!  Make sure everything is in place.')
-
-        # Define directory for which data will be output.
-        asedir = os.path.join(*[datadir, label])
-
-        # Important to avoid a race condition
-        os.makedirs(asedir, exist_ok=True)
-
-        logging.info('Downloading and processing the given ASE Database. Output will be in directory: {}.'.format(asedir))
-
         # If splits are not specified, automatically generate them.
         if splits is None:
-            splits = gen_splits_ase(asedir, database, cleanup=True)
+            splits = gen_splits_ase(database, cleanup=True)
+
+        # Set the number of points based upon the arguments
+        num_pts = {'train': num_train, 'test': num_test, 'valid': num_valid}
 
         # Process ASE database, and return dictionary of splits
         ase_data = {}
         for split, split_idx in splits.items():
-            ase_data[split] = process_ase(database, process_db_row, file_idx_list=split_idx, stack=True, forcetrain=force_train)
+            ase_data[split] = process_ase(database, process_db_row, file_idx_list=split_idx, forcetrain=force_train)
 
-        # Save processed ASE data into train/validation/test splits
-        logging.info('Saving processed data:')
-        for split, data in ase_data.items():
-            savedir = os.path.join(asedir, split+'.npz')
-            np.savez_compressed(savedir, **data)
-        logging.info('Processing/saving complete!')
+        # Convert to Cormorant ProcessedDataset
+        num_train, num_valid, num_test, datasets, num_species, max_charge = convert_to_ProcessedDatasets(ase_data, num_pts, subtract_thermo=False)
+
+        return num_train, num_valid, num_test, datasets, num_species, max_charge
 
     def _get_forces(self, energy, batch):
         forces = []
@@ -211,6 +190,7 @@ class ASEInterface(Calculator):
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):
+        #THIS ONLY WORKS IF WE ARE PASSING A DB ROW, NOT AN ATOMS OBJECT!
         data = _process_structure(atoms)
         data['atom_mask'] = torch.ones(data['charges'].shape).bool()
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
