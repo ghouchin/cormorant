@@ -126,8 +126,8 @@ class Engine(object):
 
             # Loop over splits, predict, and output/log predictions
             for split in splits:
-                predict, targets = self.predict(split)
-                self.log_predict(predict, targets, split, description='Final')
+                predict, targets, losses = self.predict(split)
+                self.log_predict(predict, targets, losses, split, description='Final')
 
         # Evaluate best model as determined by validation error
         if best:
@@ -204,10 +204,10 @@ class Engine(object):
             train_predict, train_targets = self.train_epoch()
             valid_predict, valid_targets = self.predict('valid')
 
-            train_mae, train_rmse = self.log_predict(train_predict, train_targets, 'train', epoch=epoch)
-            valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, 'valid', epoch=epoch)
+            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, 'train', epoch=epoch)
+            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, 'valid', epoch=epoch)
 
-            self._save_checkpoint(valid_mae)
+            self._save_checkpoint(valid_loss)
 
             logging.info('Epoch {} complete!'.format(epoch+1))
 
@@ -271,28 +271,29 @@ class Engine(object):
         dataloader = self.dataloaders[set]
 
         self.model.eval()
-        all_predict, all_targets = [], []
+        all_predict, all_targets, all_loss = [], [], []
         start_time = datetime.now()
         logging.info('Starting testing on {} set: '.format(set))
 
         # for batch_idx, data in enumerate(dataloader):
         for data in dataloader:
-
-            targets = self._get_target(data, self.stats)
-            predict = self.model(data).detach()
+            
+            loss, predict, targets = self.compute_single_batch(data)
 
             all_targets.append(targets)
             all_predict.append(predict)
+            all_loss.append(predict)
 
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
+        all_loss = torch.cat(all_loss)
 
         dt = (datetime.now() - start_time).total_seconds()
         logging.info(' Done! (Time: {}s)'.format(dt))
 
-        return all_predict, all_targets
+        return all_predict, all_targets, all_loss
 
-    def log_predict(self, predict, targets, dataset, epoch=-1, description='Current'):
+    def log_predict(self, predict, targets, losses, dataset, epoch=-1, description='Current'):
         predict = predict.cpu().double()
         targets = targets.cpu().double()
 
@@ -302,22 +303,28 @@ class Engine(object):
         mu, sigma = self.stats[self.target]
         mae_units = sigma*mae
         rmse_units = sigma*rmse
+        loss = torch.mean(losses)
+        loss_units = sigma*loss
 
         datastrings = {'train': 'Training', 'test': 'Testing', 'valid': 'Validation'}
 
         if epoch >= 0:
             suffix = 'final'
-            logging.info('Epoch: {} Complete! {} {} Loss: {:8.4f} {:8.4f}   w/units: {:8.4f} {:8.4f}'.format(epoch+1, description, datastrings[dataset], mae, rmse, mae_units, rmse_units))
+            logstr = 'Epoch: {} Complete! {} {} Loss: {:8.4f} w/units: {:8.4f}.  MAE: {:8.4f} w/units: {:8.4f} RMSE: {:8.4f} w/units: {:8.4f}'
+            logstr = logstr.format(epoch+1, description, datastrings[dataset], loss, loss_units, mae, mae_units, rmse, rmse_units)
+            logging.info(logstr)
         else:
             suffix = 'best'
-            logging.info('Training Complete! {} {} Loss: {:8.4f} {:8.4f}   w/units: {:8.4f} {:8.4f}'.format(description, datastrings[dataset], mae, rmse, mae_units, rmse_units))
+            logstr = 'Training: {} Complete! {} {} Loss: {:8.4f} w/units: {:8.4f}.  MAE: {:8.4f} w/units: {:8.4f} RMSE: {:8.4f} w/units: {:8.4f}'
+            logstr = logstr.format(epoch+1, description, datastrings[dataset], loss, loss_units, mae, mae_units, rmse, rmse_units)
+            logging.info(logstr)
 
         if self.predictfile is not None:
             file = self.predictfile + '.' + suffix + '.' + dataset + '.pt'
             logging.info('Saving predictions to file: {}'.format(file))
             torch.save({'predict': predict, 'targets': targets}, file)
 
-        return mae, rmse
+        return loss, mae, rmse
 
 
 class ForceEngine(Engine):
