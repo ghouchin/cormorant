@@ -321,8 +321,8 @@ class Engine(object):
 
 
 class ForceEngine(Engine):
-    def __init__(self, args, dataloaders, model, optimizer, scheduler, restart_epochs,
-                 bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, loss_fn, target='energy',
+    def __init__(self, args, dataloaders, loss_fn, model, optimizer, scheduler, target, restart_epochs,
+                 bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype,
                  uses_relative_pos=False, save=True, load=True, alpha=0, lr_minibatch=False, predictfile=None, textlog=True):
         super().__init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
                          bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, save=True, load=True,

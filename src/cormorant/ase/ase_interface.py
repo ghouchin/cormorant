@@ -3,7 +3,7 @@ from cormorant.models import CormorantASE
 from cormorant.engine import init_argparse, init_file_paths, init_logger, init_cuda, set_dataset_defaults
 from cormorant.engine import init_optimizer, init_scheduler, rel_pos_deriv_to_forces
 from cormorant.engine import Engine, ForceEngine
-from cormorant.engine.engine import energy_and_force_mse_lose
+from cormorant.engine.engine import energy_and_force_mse_loss
 # from cormorant.data.utils import initialize_datasets
 from cormorant.data.prepare import gen_splits_ase
 from cormorant.data.prepare.process import process_ase, process_db_row, _process_structure
@@ -99,12 +99,12 @@ class ASEInterface(Calculator):
 
         if force_train:
             # Define a loss function.
-            loss_fn = energy_and_force_mse_lose
+            loss_fn = energy_and_force_mse_loss
             # Instantiate the training class 
             trainer = ForceEngine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
-                             bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch, uses_relative_pos=True,
-                             num_train=num_train, batch_size=batch_size, device=device, dtype=dtype,
-                             save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
+                             bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch, 
+                             num_train=num_train, batch_size=batch_size, device=device, dtype=dtype, uses_relative_pos=True,
+                             save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch, predictfile=args.predictfile,
                              textlog=args.textlog)
 
         else:
