@@ -2,7 +2,8 @@ from ase.calculators.calculator import Calculator
 from cormorant.models import CormorantASE
 from cormorant.engine import init_argparse, init_file_paths, init_logger, init_cuda, set_dataset_defaults
 from cormorant.engine import init_optimizer, init_scheduler, rel_pos_deriv_to_forces
-from cormorant.engine import Engine
+from cormorant.engine import Engine, ForceEngine
+from cormorant.engine.engine import energy_and_force_mse_lose
 # from cormorant.data.utils import initialize_datasets
 from cormorant.data.prepare import gen_splits_ase
 from cormorant.data.prepare.process import process_ase, process_db_row, _process_structure
@@ -10,7 +11,9 @@ from cormorant.data.collate import collate_fn
 from cormorant.data.utils import convert_to_ProcessedDatasets
 from torch.utils.data import DataLoader
 import torch
+import os
 import logging
+import numpy as np
 # from ase.db import connect
 
 
@@ -25,7 +28,8 @@ class ASEInterface(Calculator):
         self.collate_fn = lambda x: collate_fn(x, edge_features=self.edge_features)
 
     @classmethod
-    def load(cls, filename, num_species, included_species=None):
+    # def load(cls, filename, num_species, included_species=None):
+    def load(cls, filename, num_species):
         saved_run = torch.load(filename)
         args = saved_run['args']
         charge_scale = max(included_species)
@@ -65,6 +69,7 @@ class ASEInterface(Calculator):
         # Initialize dataloader
         force_train = (force_factor != 0.)
         num_train = args.num_train
+        #num_train = 10
         num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
 
         # Construct PyTorch dataloaders from datasets
@@ -91,15 +96,26 @@ class ASEInterface(Calculator):
                                                    num_epoch, num_train, batch_size, args.sgd_restart,
                                                    lr_minibatch=args.lr_minibatch, lr_decay_type=args.lr_decay_type)
 
-        # Define a loss function. Just use L2 loss for now.
-        loss_fn = torch.nn.functional.mse_loss
 
-        # Instantiate the training class
-        trainer = Engine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
-                         bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch,
-                         num_train=num_train, batch_size=batch_size, device=device, dtype=dtype,
-                         save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
-                         textlog=args.textlog)
+        if force_train:
+            # Define a loss function.
+            loss_fn = energy_and_force_mse_lose
+            # Instantiate the training class 
+            trainer = ForceEngine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
+                             bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch, uses_relative_pos=True,
+                             num_train=num_train, batch_size=batch_size, device=device, dtype=dtype,
+                             save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
+                             textlog=args.textlog)
+
+        else:
+            # Define a loss function. Just use L2 loss for now.
+            loss_fn = torch.nn.functional.mse_loss
+            # Instantiate the training class 
+            trainer = Engine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
+                             bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch,
+                             num_train=num_train, batch_size=batch_size, device=device, dtype=dtype,
+                             save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
+                             textlog=args.textlog)
 
         # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
         trainer.load_checkpoint()
@@ -184,7 +200,6 @@ class ASEInterface(Calculator):
 
         for i, pred in enumerate(energy):
             derivative_of_rel_pos = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
-            derivative_of_rel_pos[i] = rel_pos_deriv_to_forces(derivative_of_rel_pos)
             forces.append(derivative_of_rel_pos[i])
         return torch.stack(forces, dim=0)
 
@@ -196,6 +211,8 @@ class ASEInterface(Calculator):
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
         data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data
+
+
 
 
 # def get_unique_images(database):
