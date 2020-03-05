@@ -137,11 +137,11 @@ class ASEInterface(Calculator):
             corm_input['relative_pos'].requires_grad_()
 
         energy = self.model(corm_input)
-        self.results['energy'] = energy
+        self.results['energy'] = energy.detach().cpu().numpy()
 
         if 'forces' in properties:
             forces = self._get_forces(energy, corm_input)
-            self.results['forces'] = forces
+            self.results['forces'] = forces.detach().cpu().numpy()
 
     def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_train=True):
         """
@@ -187,9 +187,8 @@ class ASEInterface(Calculator):
         forces = []
 
         for i, pred in enumerate(energy):
-            print(pred.requires_grad)
-            chunk_forces = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
-            forces.append(chunk_forces[i])
+            derivative_of_rel_pos = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
+            forces.append(derivative_of_rel_pos[i])
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):
@@ -200,6 +199,31 @@ class ASEInterface(Calculator):
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
         data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data
+
+    def _rel_pos_deriv_to_forces(self, rpd):
+        """
+        WARNING: IS DESTRUCTIVE: THE DIAGONAL OF RPD IS HARD SET TO ZERO!
+
+        Parameters
+        ----------
+        rpd : torch Tensor
+            Derivative of the output with respect to the relative positions.
+            Last three dimensions are assumed to be two atomic index dimensions
+            followed by the xyz index (... x N x N x 3).
+
+        Returns
+        -------
+        forces : torch Tensor
+            Derivative of the output with respect to the atomic positions.
+        """
+        N = rpd.shape[-1]
+        idx = torch.arange(N)
+        rpd[..., idx, idx, :] = 0.
+        row_sum = torch.sum(rpd, dim=-2)
+        col_sum = torch.sum(rpd, dim=-3)
+        forces = row_sum - col_sum
+        return forces
+
 
 
 # def get_unique_images(database):
