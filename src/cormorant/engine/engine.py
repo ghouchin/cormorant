@@ -3,6 +3,7 @@ import torch
 import os
 from datetime import datetime
 from math import sqrt, inf, ceil
+from cormorant.engine.utils import rel_pos_deriv_to_forces
 
 MAE = torch.nn.L1Loss()
 MSE = torch.nn.MSELoss()
@@ -19,6 +20,7 @@ class Engine(object):
 
     Roughly based upon TorchNet
     """
+
     def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
                  bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, save=True, load=True, alpha=0,
                  lr_minibatch=False, predictfile=None, textlog=True):
@@ -319,17 +321,50 @@ class Engine(object):
 
 
 class ForceEngine(Engine):
+    def __init__(self, args, dataloaders, model, optimizer, scheduler, restart_epochs,
+                 bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, loss_fn, target='energy',
+                 uses_relative_pos=False, save=True, load=True, alpha=0, lr_minibatch=False, predictfile=None, textlog=True):
+        super().__init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
+                         bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, save=True, load=True,
+                         alpha=0, lr_minibatch=False, predictfile=None, textlog=True)
+        self.uses_relative_pos = uses_relative_pos
+
     def compute_single_batch(self, data):
-        ############ NEEDS CHANGING!
         # Standard zero-gradient
         self.optimizer.zero_grad()
 
-        # Get targets and predictions
-        for prop_that_needs_grads in self.need_grads:
-            data[prop_that_needs_grads].requires_grad_()
+        if self.uses_relative_pos:
+            pos_input = data['relative_pos']
+        else:
+            pos_input = data['positions']
+        pos_input.requires_grad_()
 
-        targets = self._get_target(data, self.stats)
-        predict = self.model(data)
+        # Get targets and predictions
+        energy_scaled = self._get_target(data, self.stats)
+        force_scaled = data['forces'].to(self.device, self.dtype)
+        if self.stats is not None:
+            __, sigma = self.stats[self.target]
+            force_scaled /= sigma
+
+        energy_pred = self.model(data)
+        force_pred = []
+        for i, pred in enumerate(energy_pred):
+            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
+            if self.uses_relative_pos:
+                force_i = rel_pos_deriv_to_forces(force_i)
+            force_pred.append(force_i)
+        force_pred = torch.stack(force_pred)
+
         # Calculate loss and backprop
-        loss = self.loss_fn(predict, targets)
-        return loss, predict, targets
+        loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
+
+        return loss, energy_pred, energy_scaled
+
+
+def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scaled, force_factor=0.):
+    """
+    Basic MSE loss on the energies and forces
+    """
+    energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
+    force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
+    return energy_mse + force_factor * force_mse
