@@ -267,3 +267,28 @@ def init_cuda(cuda, dtype):
         raise ValueError('Incorrect data type chosen!')
 
     return device, dtype
+
+
+def rel_pos_deriv_to_forces(rpd):
+    """
+    WARNING: IS DESTRUCTIVE: THE DIAGONAL OF RPD IS HARD SET TO ZERO!
+
+    Parameters
+    ----------
+    rpd : torch Tensor
+        Derivative of the output with respect to the relative positions.
+        Last three dimensions are assumed to be two atomic index dimensions
+        followed by the xyz index (... x N x N x 3).
+
+    Returns
+    -------
+    forces : torch Tensor
+        Derivative of the output with respect to the atomic positions.
+    """
+    N = rpd.shape[-1]
+    idx = torch.arange(N)
+    rpd[..., idx, idx, :] = 0.
+    row_sum = torch.sum(rpd, dim=-2)
+    col_sum = torch.sum(rpd, dim=-3)
+    forces = row_sum - col_sum
+    return forces

@@ -1,7 +1,7 @@
 from ase.calculators.calculator import Calculator
 from cormorant.models import CormorantASE
 from cormorant.engine import init_argparse, init_file_paths, init_logger, init_cuda, set_dataset_defaults
-from cormorant.engine import init_optimizer, init_scheduler
+from cormorant.engine import init_optimizer, init_scheduler, rel_pos_deriv_to_forces
 from cormorant.engine import Engine
 # from cormorant.data.utils import initialize_datasets
 from cormorant.data.prepare import gen_splits_ase
@@ -10,9 +10,7 @@ from cormorant.data.collate import collate_fn
 from cormorant.data.utils import convert_to_ProcessedDatasets
 from torch.utils.data import DataLoader
 import torch
-import os
 import logging
-import numpy as np
 # from ase.db import connect
 
 
@@ -27,8 +25,7 @@ class ASEInterface(Calculator):
         self.collate_fn = lambda x: collate_fn(x, edge_features=self.edge_features)
 
     @classmethod
-    # def load(cls, filename, num_species, included_species=None):
-    def load(cls, filename, num_species):
+    def load(cls, filename, num_species, included_species=None):
         saved_run = torch.load(filename)
         args = saved_run['args']
         charge_scale = max(included_species)
@@ -67,8 +64,7 @@ class ASEInterface(Calculator):
 
         # Initialize dataloader
         force_train = (force_factor != 0.)
-        # num_train = args.num_train
-        num_train = 10
+        num_train = args.num_train
         num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
 
         # Construct PyTorch dataloaders from datasets
@@ -188,6 +184,7 @@ class ASEInterface(Calculator):
 
         for i, pred in enumerate(energy):
             derivative_of_rel_pos = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
+            derivative_of_rel_pos[i] = rel_pos_deriv_to_forces(derivative_of_rel_pos)
             forces.append(derivative_of_rel_pos[i])
         return torch.stack(forces, dim=0)
 
@@ -199,31 +196,6 @@ class ASEInterface(Calculator):
         data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
         data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data
-
-    def _rel_pos_deriv_to_forces(self, rpd):
-        """
-        WARNING: IS DESTRUCTIVE: THE DIAGONAL OF RPD IS HARD SET TO ZERO!
-
-        Parameters
-        ----------
-        rpd : torch Tensor
-            Derivative of the output with respect to the relative positions.
-            Last three dimensions are assumed to be two atomic index dimensions
-            followed by the xyz index (... x N x N x 3).
-
-        Returns
-        -------
-        forces : torch Tensor
-            Derivative of the output with respect to the atomic positions.
-        """
-        N = rpd.shape[-1]
-        idx = torch.arange(N)
-        rpd[..., idx, idx, :] = 0.
-        row_sum = torch.sum(rpd, dim=-2)
-        col_sum = torch.sum(rpd, dim=-3)
-        forces = row_sum - col_sum
-        return forces
-
 
 
 # def get_unique_images(database):

@@ -11,7 +11,7 @@ RMSE = lambda x, y: sqrt(MSE(x, y))
 logger = logging.getLogger(__name__)
 
 
-class Engine:
+class Engine(object):
     """
     Class for both training and inference phasees of the Cormorant network.
 
@@ -25,7 +25,6 @@ class Engine:
         self.args = args
         self.dataloaders = dataloaders
         self.model = model
-        self.loss_fn = loss_fn
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.restart_epochs = restart_epochs
@@ -39,6 +38,7 @@ class Engine:
         self.textlog = textlog
         self.save = save
         self.load = load
+        self.loss_fn = loss_fn
 
         self.stats = dataloaders['train'].dataset.stats
         self.bestfile = bestfile
@@ -233,15 +233,8 @@ class Engine:
         for batch_idx, data in enumerate(dataloader):
             batch_t = datetime.now()
 
-            # Standard zero-gradient
-            self.optimizer.zero_grad()
-
-            # Get targets and predictions
-            targets = self._get_target(data, self.stats)
-            predict = self.model(data)
-
             # Calculate loss and backprop
-            loss = self.loss_fn(predict, targets)
+            loss, predict, targets = self.compute_single_batch(data)
             loss.backward()
 
             # Step optimizer and learning rate
@@ -261,6 +254,16 @@ class Engine:
         all_targets = torch.cat(all_targets)
 
         return all_predict, all_targets
+
+    def compute_single_batch(self, data):
+        # Standard zero-gradient
+        self.optimizer.zero_grad()
+
+        targets = self._get_target(data, self.stats)
+        predict = self.model(data)
+
+        loss = self.loss_fn(predict, targets)
+        return loss, predict, targets
 
     def predict(self, set='valid'):
         dataloader = self.dataloaders[set]
@@ -313,3 +316,20 @@ class Engine:
             torch.save({'predict': predict, 'targets': targets}, file)
 
         return mae, rmse
+
+
+class ForceEngine(Engine):
+    def compute_single_batch(self, data):
+        ############ NEEDS CHANGING!
+        # Standard zero-gradient
+        self.optimizer.zero_grad()
+
+        # Get targets and predictions
+        for prop_that_needs_grads in self.need_grads:
+            data[prop_that_needs_grads].requires_grad_()
+
+        targets = self._get_target(data, self.stats)
+        predict = self.model(data)
+        # Calculate loss and backprop
+        loss = self.loss_fn(predict, targets)
+        return loss, predict, targets
