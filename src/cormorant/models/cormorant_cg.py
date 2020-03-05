@@ -1,13 +1,8 @@
-import torch
 import torch.nn as nn
+import logging
 
 from cormorant.models import CormorantAtomLevel, CormorantEdgeLevel
-
-from cormorant.nn import MaskLevel, DotMatrix
-from cormorant.nn import CatMixReps
-from cormorant.cg_lib import CGProduct, CGModule
-
-import logging
+from cormorant.cg_lib import CGModule
 
 
 class CormorantCG(CGModule):
@@ -16,14 +11,16 @@ class CormorantCG(CGModule):
                  level_gain, weight_init,
                  cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
                  cat=True, gaussian_mask=False,
-                 device=None, dtype=None, cg_dict=None):
+                 device=None, dtype=None, cg_dict=None,
+                 use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
+                 use_ag=True, use_sq=True, use_id=True):
         super().__init__(device=device, dtype=dtype, cg_dict=cg_dict)
         device, dtype, cg_dict = self.device, self.dtype, self.cg_dict
 
         self.max_sh = max_sh
 
-        tau_atom_in = atom_in.tau if type(tau_in_atom) is CGModule else tau_in_atom
-        tau_edge_in = edge_in.tau if type(tau_in_edge) is CGModule else tau_in_edge
+        tau_atom_in = tau_in_atom.tau if type(tau_in_atom) is CGModule else tau_in_atom
+        tau_edge_in = tau_in_edge.tau if type(tau_in_edge) is CGModule else tau_in_edge
 
         logging.info('{} {}'.format(tau_atom_in, tau_edge_in))
 
@@ -36,14 +33,16 @@ class CormorantCG(CGModule):
             # First add the edge, since the output type determines the next level
             edge_lvl = CormorantEdgeLevel(tau_atom, tau_edge, tau_pos[level], num_channels[level], max_sh[level],
                                           cutoff_type, hard_cut_rad[level], soft_cut_rad[level], soft_cut_width[level],
-                                          gaussian_mask=gaussian_mask, device=device, dtype=dtype)
+                                          gaussian_mask=gaussian_mask, device=device, dtype=dtype,
+                                          use_edge_in=use_edge_in, use_edge_dot=use_edge_dot, use_pos_funcs=use_pos_funcs)
             edge_levels.append(edge_lvl)
             tau_edge = edge_lvl.tau
 
             # Now add the NBody level
             atom_lvl = CormorantAtomLevel(tau_atom, tau_edge, maxl[level], num_channels[level+1],
                                           level_gain[level], weight_init,
-                                          device=device, dtype=dtype, cg_dict=cg_dict)
+                                          device=device, dtype=dtype, cg_dict=cg_dict,
+                                          use_ag=use_ag, use_sq=use_sq, use_id=use_id)
             atom_levels.append(atom_lvl)
             tau_atom = atom_lvl.tau
 
@@ -55,7 +54,7 @@ class CormorantCG(CGModule):
         self.tau_levels_atom = [level.tau for level in atom_levels]
         self.tau_levels_edge = [level.tau for level in edge_levels]
 
-    def forward(self, atom_reps, atom_mask, edge_net, edge_mask, rad_funcs, norms, sph_harm):
+    def forward(self, atom_reps, atom_mask, edge_net, edge_mask, rad_funcs, norms, sq_norms, sph_harm):
         """
         Runs a forward pass of the Cormorant CG layers.
 
@@ -94,9 +93,10 @@ class CormorantCG(CGModule):
         edges_all = []
 
         for idx, (atom_level, edge_level, max_sh) in enumerate(zip(self.atom_levels, self.edge_levels, self.max_sh)):
-            edge_net = edge_level(edge_net, atom_reps, rad_funcs[idx], edge_mask, norms)
+            edge_net = edge_level(edge_net, atom_reps, rad_funcs[idx], edge_mask, norms, sq_norms)
             edge_reps = edge_net * sph_harm[:max_sh+1]
             atom_reps = atom_level(atom_reps, edge_reps, atom_mask)
+            print(atom_reps.shapes)
 
             atoms_all.append(atom_reps)
             edges_all.append(edge_net)

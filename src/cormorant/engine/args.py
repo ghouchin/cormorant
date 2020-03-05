@@ -2,18 +2,17 @@ import argparse
 
 from math import inf
 
-#### Argument parser ####
 
 def setup_shared_args(parser):
     """
     Sets up the argparse object for the qm9 dataset
-    
-    Parameters 
+
+    Parameters
     ----------
     parser : :class:`argparse.ArgumentParser`
         Argument Parser with arguments.
-    
-    Parameters 
+
+    Parameters
     ----------
     parser : :class:`argparse.ArgumentParser`
         The same Argument Parser, now with more arguments.
@@ -70,7 +69,7 @@ def setup_shared_args(parser):
     parser.add_argument('--predict', action=BoolArg, default=True,
                         help='Save predictions. (default)')
 
-    ### Arguments for files to save things to
+    # ## Arguments for files to save things to
     # Job prefix is used to name checkpoint/best file
     parser.add_argument('--prefix', '--jobname', type=str, default='nosave',
                         help='Prefix to set load, save, and logfile. (default: nosave)')
@@ -121,18 +120,28 @@ def setup_shared_args(parser):
     # Computation options
     parser.add_argument('--cuda', dest='cuda', action='store_true',
                         help='Use CUDA (default)')
+    parser.add_argument('--num-workers', type=int, default=1,
+                        help='Set number of workers in dataloader. (Default: 1)')
+    parser.add_argument('--no-edge-in', dest='use_edge_in', action='store_false')
+    parser.add_argument('--no-edge-dot', dest='use_edge_dot', action='store_false')
+    parser.add_argument('--no-pos-funcs', dest='use_pos_funcs', action='store_false')
+    parser.add_argument('--no-ag', dest='use_ag', action='store_false')
+    parser.add_argument('--no-sq', dest='use_sq', action='store_false')
+    parser.add_argument('--no-id', dest='use_id', action='store_false')
     parser.add_argument('--no-cuda', '--cpu', dest='cuda', action='store_false',
                         help='Use CPU')
-    parser.set_defaults(cuda=True)
-
     parser.add_argument('--float', dest='dtype', action='store_const', const='float',
                         help='Use floats.')
     parser.add_argument('--double', dest='dtype', action='store_const', const='double',
                         help='Use doubles.')
+    parser.set_defaults(use_edge_in=True)
+    parser.set_defaults(use_edge_dot=True)
+    parser.set_defaults(use_pos_funcs=True)
+    parser.set_defaults(use_ag=True)
+    parser.set_defaults(use_sq=True)
+    parser.set_defaults(use_id=True)
+    parser.set_defaults(cuda=True)
     parser.set_defaults(dtype='float')
-
-    parser.add_argument('--num-workers', type=int, default=1,
-                        help='Set number of workers in dataloader. (Default: 1)')
 
     # Model options
     parser.add_argument('--num-cg-levels', type=int, default=4, metavar='N',
@@ -175,16 +184,15 @@ def setup_shared_args(parser):
                         help='Number levels to use in input featurization MPNN. (default: 1)')
     parser.add_argument('--top', '--output', type=str, default='linear',
                         help='Top function to use (linear | PMLP) default: linear')
-
     parser.add_argument('--gaussian-mask', action='store_true',
                         help='Use gaussian mask instead of sigmoid mask.')
-
     parser.add_argument('--edge-cat', action='store_true',
-                        help='Concatenate the scalars from different \ell in the dot-product-matrix part of the edge network.')
+                        help='Concatenate the scalars from different ell in the dot-product-matrix part of the edge network.')
     parser.add_argument('--target', type=str, default='',
                         help='Learning target for a dataset (such as qm9) with multiple options.')
 
     return parser
+
 
 def setup_argparse(dataset):
     """
@@ -202,10 +210,10 @@ def setup_argparse(dataset):
     """
     parser = argparse.ArgumentParser(description='Cormorant network options for the md17 dataset.')
     parser = setup_shared_args(parser)
-    if dataset == "md17":
+    if dataset == 'md17':
         parser.add_argument('--subset', '--molecule', type=str, default='',
                             help='Subset/molecule on data with subsets (such as md17).')
-    elif dataset == "qm9":
+    elif dataset == 'qm9':
         parser.add_argument('--subtract-thermo', action=BoolArg, default=True,
                             help='Subtract thermochemical energy from relvant learning targets in QM9 dataset.')
     elif dataset == "ase-db":
@@ -214,7 +222,7 @@ def setup_argparse(dataset):
         parser.add_argument('--db_path', type=str, default='',
                             help='Location of the ASE Database to load')
     else:
-        raise ValueError("Dataset is not recognized")
+        raise ValueError('Dataset is not recognized')
     return parser
 
 
@@ -226,11 +234,11 @@ class BoolArg(argparse.Action):
     """
     def __init__(self, default=None, nargs=None, *args, **kwargs):
         if nargs is not None:
-            raise ValueError("nargs not allowed")
+            raise ValueError('nargs not allowed')
 
         # Set default
         if default is None:
-            raise ValueError("Default must be set!")
+            raise ValueError('Default must be set!')
 
         default = _arg_to_bool(default)
 
@@ -246,6 +254,7 @@ class BoolArg(argparse.Action):
             argval = True
 
         setattr(namespace, self.dest, argval)
+
 
 def _arg_to_bool(arg):
     # Convert argument to boolean
@@ -272,5 +281,6 @@ class Range(object):
     def __init__(self, start, end):
         self.start = start
         self.end = end
+
     def __eq__(self, other):
         return self.start <= other <= self.end

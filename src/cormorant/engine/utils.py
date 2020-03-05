@@ -1,11 +1,11 @@
 import torch
-from torch.utils.data import DataLoader
 import torch.optim as optim
 import torch.optim.lr_scheduler as sched
 
-import os, sys, pickle
+import os
+import sys
 from datetime import datetime
-from math import inf, log, log2, exp, ceil
+from math import log, log2, exp, ceil, sqrt
 
 import logging
 logger = logging.getLogger(__name__)
@@ -16,9 +16,10 @@ logger = logging.getLogger(__name__)
 
 MAE = torch.nn.L1Loss()
 MSE = torch.nn.MSELoss()
-RMSE = lambda x, y : sqrt(MSE(x, y))
+RMSE = lambda x, y: sqrt(MSE(x, y))
 
-#### Initialize parameters for training run ####
+# ### Initialize parameters for training run ####
+
 
 def init_argparse(dataset):
     """
@@ -32,7 +33,7 @@ def init_argparse(dataset):
     Returns
     -------
     args : :class:`Namespace`
-        Namespace with a dictionary of arguments where the key is the name of 
+        Namespace with a dictionary of arguments where the key is the name of
         the argument and the item is the input value.
     """
     from cormorant.engine.args import setup_argparse
@@ -43,6 +44,7 @@ def init_argparse(dataset):
     d['dataset'] = dataset
 
     return args
+
 
 def init_logger(args):
     if args.logfile:
@@ -58,12 +60,12 @@ def init_logger(args):
         ValueError('Inappropriate choice of logging_level. {}'.format(args.logging_level))
 
     logging.basicConfig(level=loglevel,
-                        format="%(message)s",
+                        format='%(message)s',
                         handlers=handlers
                         )
 
-def init_file_paths(args):
 
+def init_file_paths(args):
     # Initialize files and directories to load/save logs, models, and predictions
     workdir = args.workdir
     prefix = args.prefix
@@ -71,11 +73,16 @@ def init_file_paths(args):
     logdir = args.logdir
     predictdir = args.predictdir
 
-    if prefix and not args.logfile:  args.logfile =  os.path.join(workdir, logdir, prefix+'.log')
-    if prefix and not args.bestfile: args.bestfile = os.path.join(workdir, modeldir, prefix+'_best.pt')
-    if prefix and not args.checkfile: args.checkfile = os.path.join(workdir, modeldir, prefix+'.pt')
-    if prefix and not args.loadfile: args.loadfile = args.checkfile
-    if prefix and not args.predictfile: args.predictfile = os.path.join(workdir, predictdir, prefix)
+    if prefix and not args.logfile:
+        args.logfile = os.path.join(workdir, logdir, prefix+'.log')
+    if prefix and not args.bestfile:
+        args.bestfile = os.path.join(workdir, modeldir, prefix+'_best.pt')
+    if prefix and not args.checkfile:
+        args.checkfile = os.path.join(workdir, modeldir, prefix+'.pt')
+    if prefix and not args.loadfile:
+        args.loadfile = args.checkfile
+    if prefix and not args.predictfile:
+        args.predictfile = os.path.join(workdir, predictdir, prefix)
 
     if not os.path.exists(modeldir):
         logger.warning('Model directory {} does not exist. Creating!'.format(modeldir))
@@ -86,7 +93,6 @@ def init_file_paths(args):
     if not os.path.exists(predictdir):
         logger.warning('Prediction directory {} does not exist. Creating!'.format(predictdir))
         os.mkdir(predictdir)
-
 
     args.dataset = args.dataset.lower()
 
@@ -108,7 +114,6 @@ def init_file_paths(args):
     logger.info(' '.join([arg for arg in sys.argv]))
     logger.info('Log, best, checkpoint, load files: {} {} {} {}'.format(args.logfile, args.bestfile, args.checkfile, args.loadfile))
     logger.info('Dataset, learning target, datadir: {} {} {}'.format(args.dataset, args.target, args.datadir))
-    #_git_version() #why is this needed? Breaks when on backend because there is not internet.
 
     if args.seed < 0:
         seed = int((datetime.now().timestamp())*100000)
@@ -118,7 +123,6 @@ def init_file_paths(args):
 
     return args
 
-#### Initialize optimizer ####
 
 def init_optimizer(args, model):
 
@@ -127,7 +131,9 @@ def init_optimizer(args, model):
 
     optim_type = args.optim.lower()
 
-    if optim_type == 'adam':
+    if optim_type == 'adamw':
+        optimizer = optim.AdamW(params, amsgrad=False)
+    elif optim_type == 'adam':
         optimizer = optim.Adam(params, amsgrad=False)
     elif optim_type == 'amsgrad':
         optimizer = optim.Adam(params, amsgrad=True)
@@ -139,6 +145,7 @@ def init_optimizer(args, model):
         raise ValueError('Incorrect choice of optimizer')
 
     return optimizer
+
 
 def init_scheduler(args, optimizer):
     lr_init, lr_final = args.lr_init, args.lr_final
@@ -174,16 +181,10 @@ def init_scheduler(args, optimizer):
 
     return scheduler, restart_epochs
 
-#### Other initialization ####
-
-#def _git_version():
-#    from subprocess import run, PIPE
-#    git_commit = run('git log --pretty=%h -n 1'.split(), stdout=PIPE)
-#    logger.info('Git status: {}'.format(git_commit.stdout.decode()))
 
 def init_cuda(args):
     if args.cuda:
-        assert(torch.cuda.is_available()), "No CUDA device available!"
+        assert(torch.cuda.is_available()), 'No CUDA device available!'
         logger.info('Beginning training on CUDA/GPU! Device: {}'.format(torch.cuda.current_device()))
         torch.cuda.init()
         torch.cuda.empty_cache()

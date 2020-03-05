@@ -1,18 +1,15 @@
+import logging
 import torch
-from torch.utils.data import DataLoader
-import torch.optim as optim
-import torch.optim.lr_scheduler as sched
-
-import argparse, os, sys, pickle
+import os
 from datetime import datetime
-from math import sqrt, inf, log, log2, exp, ceil
+from math import sqrt, inf, ceil
 
 MAE = torch.nn.L1Loss()
 MSE = torch.nn.MSELoss()
-RMSE = lambda x, y : sqrt(MSE(x, y))
+RMSE = lambda x, y: sqrt(MSE(x, y))
 
-import logging
 logger = logging.getLogger(__name__)
+
 
 class Engine:
     """
@@ -22,7 +19,7 @@ class Engine:
 
     Roughly based upon TorchNet
     """
-    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype):
+    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, restart_epochs, device, dtype, stats=None, remove_nonzero=False):
         self.args = args
         self.dataloaders = dataloaders
         self.model = model
@@ -30,8 +27,12 @@ class Engine:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.restart_epochs = restart_epochs
+        self.remove_nonzero = remove_nonzero
 
-        self.stats = dataloaders['train'].dataset.stats
+        if stats is None:
+            self.stats = dataloaders['train'].dataset.stats
+        else:
+            self.stats = stats
 
         # TODO: Fix this until TB summarize is implemented.
         self.summarize = False
@@ -44,7 +45,8 @@ class Engine:
         self.dtype = dtype
 
     def _save_checkpoint(self, valid_mae):
-        if not self.args.save: return
+        if not self.args.save:
+            return
 
         save_dict = {'args': self.args,
                      'model_state': self.model.state_dict(),
@@ -62,33 +64,40 @@ class Engine:
         logging.info('Saving to checkpoint file: {}'.format(self.args.checkfile))
         torch.save(save_dict, self.args.checkfile)
 
-    def load_checkpoint(self):
+    def load_checkpoint(self, load_training_state=True):
         """
         Load checkpoint from previous file.
+
+        Parameters
+        ----------
+        load_training_state : :class:`bool`
+            If true, load the training state as well.
+            Else, begins the training from scratch.
         """
         if not self.args.load:
             return
         elif os.path.exists(self.args.checkfile):
             logging.info('Loading previous model from checkpoint!')
-            self.load_state(self.args.checkfile)
+            self.load_state(self.args.checkfile, load_training_state)
         else:
             logging.info('No checkpoint included! Starting fresh training program.')
             return
 
-    def load_state(self, checkfile):
+    def load_state(self, checkfile, load_training_state=True):
         logging.info('Loading from checkpoint!')
 
         checkpoint = torch.load(checkfile)
         self.model.load_state_dict(checkpoint['model_state'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state'])
-        self.scheduler.load_state_dict(checkpoint['scheduler_state'])
-        self.epoch = checkpoint['epoch']
-        self.best_loss = checkpoint['best_loss']
-        self.minibatch = checkpoint['minibatch']
+        if load_training_state:
+            self.optimizer.load_state_dict(checkpoint['optimizer_state'])
+            self.scheduler.load_state_dict(checkpoint['scheduler_state'])
+            self.epoch = checkpoint['epoch']
+            self.best_loss = checkpoint['best_loss']
+            self.minibatch = checkpoint['minibatch']
 
-        logging.info('Best loss from checkpoint: {} at epoch {}'.format(self.best_loss, self.epoch))
+            logging.info('Best loss from checkpoint: {} at epoch {}'.format(self.best_loss, self.epoch))
 
-    def evaluate(self, splits=['train', 'valid', 'test'], best=True, final=True):
+    def evaluate(self, splits=None, best=True, final=True):
         """
         Evaluate model on training/validation/testing splits.
 
@@ -96,6 +105,8 @@ class Engine:
         :best: Evaluate best model as determined by minimum validation error over evolution
         :final: Evaluate final model at end of training phase
         """
+        if splits is None:
+            splits = ['train', 'valid', 'test']
         if not self.args.save:
             logging.info('No model saved! Cannot give final status.')
             return
@@ -125,10 +136,7 @@ class Engine:
             for split in splits:
                 predict, targets = self.predict(split)
                 self.log_predict(predict, targets, split, description='Best')
-
-
         logging.info('Inference phase complete!')
-
 
     def _warm_restart(self, epoch):
         restart_epochs = self.restart_epochs
@@ -170,7 +178,6 @@ class Engine:
         if self.summarize:
             self.summarize.add_scalar('train/mae', sqrt(mini_batch_loss), self.minibatch)
 
-
     def _step_lr_batch(self):
         if self.args.lr_minibatch:
             self.scheduler.step()
@@ -183,8 +190,11 @@ class Engine:
         epoch0 = self.epoch
         for epoch in range(epoch0, self.args.num_epoch):
             self.epoch = epoch
-            epoch_time = datetime.now()
             logging.info('Starting Epoch: {}'.format(epoch+1))
+            logging.info('NUM TRAINING POINTS: {}'.format(self.dataloaders['train'].dataset.num_pts))
+            logging.info('NUM VALIDATION POINTS: {}'.format(self.dataloaders['valid'].dataset.num_pts))
+            logging.info('NUM TESTING POINTS: {}'.format(self.dataloaders['test'].dataset.num_pts))
+            logging.info('Epoch, Batch, Root Loss, MAE, RMSE, dtbatch, epoch time, collate time')
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
@@ -212,10 +222,26 @@ class Engine:
 
         return targets
 
+    def _get_target_nonzero(self, data, stats=None):
+        """
+        Get the learning target.
+        If a stats dictionary is included, return a normalized learning target.
+        """
+        targets = data[self.args.target].to(self.device, self.dtype)
+
+        nonzero = targets.nonzero()
+        nonzero = nonzero.split(1, dim=1)  # Split into valid indices.
+        targets = targets[nonzero]
+
+        if stats is not None:
+            mu, sigma = stats[self.args.target]
+            targets = (targets - mu) / sigma
+
+        return targets, nonzero
+
     def train_epoch(self):
         dataloader = self.dataloaders['train']
 
-        current_idx, num_data_pts = 0, len(dataloader.dataset)
         self.mae, self.rmse, self.batch_time = 0, 0, 0
         all_predict, all_targets = [], []
 
@@ -228,8 +254,16 @@ class Engine:
             self.optimizer.zero_grad()
 
             # Get targets and predictions
-            targets = self._get_target(data, self.stats)
-            predict = self.model(data)
+            if self.remove_nonzero:
+                targets, nonzero = self._get_target_nonzero(data, self.stats)
+                predict = self.model(data)
+                predict = predict[nonzero]
+            else:
+                targets = self._get_target(data, self.stats)
+                predict = self.model(data)
+            # print(self.remove_nonzero)
+            # print(targets.shape)
+            # print(predict.shape)
 
             # Calculate loss and backprop
             loss = self.loss_fn(predict, targets)
@@ -247,7 +281,6 @@ class Engine:
             self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
 
             self.minibatch += 1
-
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
@@ -262,9 +295,13 @@ class Engine:
         logging.info('Starting testing on {} set: '.format(set))
 
         for batch_idx, data in enumerate(dataloader):
-
-            targets = self._get_target(data, self.stats)
-            predict = self.model(data).detach()
+            if self.remove_nonzero:
+                targets, nonzero = self._get_target_nonzero(data, self.stats)
+                predict = self.model(data).detach()
+                predict = predict[nonzero]
+            else:
+                targets = self._get_target(data, self.stats)
+                predict = self.model(data).detach()
 
             all_targets.append(targets)
             all_predict.append(predict)
@@ -300,6 +337,6 @@ class Engine:
         if self.args.predict:
             file = self.args.predictfile + '.' + suffix + '.' + dataset + '.pt'
             logging.info('Saving predictions to file: {}'.format(file))
-            torch.save({'predict': predict, 'targets': targets}, file)
+            torch.save({'predict': predict, 'targets': targets, 'stats': self.stats[self.args.target]}, file)
 
         return mae, rmse

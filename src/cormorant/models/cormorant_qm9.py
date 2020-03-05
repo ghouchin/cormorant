@@ -19,32 +19,34 @@ class CormorantQM9(CGModule):
 
     Parameters
     ----------
-    maxl : :obj:`int` of :obj:`list` of :obj:`int`
+    maxl : :class:`int` of :class:`list` of :class:`int`
         Maximum weight in the output of CG products. (Expanded to list of
-        length :obj:`num_cg_levels`)
-    max_sh : :obj:`int` of :obj:`list` of :obj:`int`
+        length :class:`num_cg_levels`)
+    max_sh : :class:`int` of :class:`list` of :class:`int`
         Maximum weight in the output of the spherical harmonics  (Expanded to list of
-        length :obj:`num_cg_levels`)
-    num_cg_levels : :obj:`int`
+        length :class:`num_cg_levels`)
+    num_cg_levels : :class:`int`
         Number of cg levels to use.
-    num_channels : :obj:`int` of :obj:`list` of :obj:`int`
+    num_channels : :class:`int` of :class:`list` of :class:`int`
         Number of channels that the output of each CG are mixed to (Expanded to list of
-        length :obj:`num_cg_levels`)
-    num_species : :obj:`int`
+        length :class:`num_cg_levels`)
+    num_species : :class:`int`
         Number of species of atoms included in the input dataset.
-
-    device : :obj:`torch.device`
+    device : :class:`torch.device`
         Device to initialize the level to
-    dtype : :obj:`torch.dtype`
+    dtype : :class:`torch.torch.dtype`
         Data type to initialize the level to level to
-    cg_dict : :obj:`nn.cg_lib.CGDict`
+    cg_dict : :class:`CGDict <cormorant.cg_lib.CGDict>`
+        Clebsch-gordan dictionary object.
     """
     def __init__(self, maxl, max_sh, num_cg_levels, num_channels, num_species,
                  cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
                  weight_init, level_gain, charge_power, basis_set,
                  charge_scale, gaussian_mask,
                  top, input, num_mpnn_layers, activation='leakyrelu',
-                 device=None, dtype=None, cg_dict=None):
+                 device=None, dtype=None, cg_dict=None,
+                 use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
+                 use_ag=True, use_sq=True, use_id=True, rad_func_type='old'):
 
         logging.info('Initializing network!')
         level_gain = expand_var_list(level_gain, num_cg_levels)
@@ -67,8 +69,7 @@ class CormorantQM9(CGModule):
         super().__init__(maxl=max(maxl+max_sh), device=device, dtype=dtype, cg_dict=cg_dict)
         device, dtype, cg_dict = self.device, self.dtype, self.cg_dict
 
-        print('CGDICT', cg_dict.maxl)
-
+        logging.info('CGdict maxl: {}'.format(cg_dict.maxl))
         self.num_cg_levels = num_cg_levels
         self.num_channels = num_channels
         self.charge_power = charge_power
@@ -80,8 +81,16 @@ class CormorantQM9(CGModule):
                                                device=device, dtype=dtype, cg_dict=cg_dict)
 
         # Set up position functions, now independent of spherical harmonics
-        self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
-                                       device=self.device, dtype=self.dtype)
+        # self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
+        #                                device=self.device, dtype=self.dtype)
+        if rad_func_type == 'paulinet':
+            from dlqmc.nn.electrocormorant import  PNetRadialFilter
+            from dlqmc.nn.base import DistanceBasis
+            dist_object = DistanceBasis(32).to(device=self.device)
+            self.rad_funcs = PNetRadialFilter(max_sh, dist_object, num_cg_levels, device=self.device, dtype=self.dtype)
+        else:
+            self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
+                                           device=self.device, dtype=self.dtype)
         tau_pos = self.rad_funcs.tau
 
         num_scalars_in = self.num_species * (self.charge_power + 1)
@@ -96,11 +105,12 @@ class CormorantQM9(CGModule):
         tau_in_edge = self.input_func_edge.tau
 
         self.cormorant_cg = CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
-                     tau_pos, num_cg_levels, num_channels, level_gain, weight_init,
-                     cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
-                     cat=True, gaussian_mask=False,
-                     device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
-
+                                        tau_pos, num_cg_levels, num_channels, level_gain, weight_init,
+                                        cutoff_type, hard_cut_rad, soft_cut_rad, soft_cut_width,
+                                        cat=True, gaussian_mask=gaussian_mask,
+                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict,
+                                        use_edge_in=use_edge_in, use_edge_dot=use_edge_dot, use_pos_funcs=use_pos_funcs,
+                                        use_ag=use_ag, use_sq=use_sq, use_id=use_id)
         tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
         tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
 
@@ -116,7 +126,7 @@ class CormorantQM9(CGModule):
         self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
-            sum([p.nelement() for p in self.parameters()])))
+            sum(p.nelement() for p in self.parameters())))
 
     def forward(self, data, covariance_test=False):
         """
@@ -138,16 +148,16 @@ class CormorantQM9(CGModule):
         atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions = self.prepare_input(data)
 
         # Calculate spherical harmonics and radial functions
-        spherical_harmonics, norms = self.sph_harms(atom_positions, atom_positions)
+        spherical_harmonics, norms, sq_norms = self.sph_harms(atom_positions, atom_positions)
         rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
-        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
-        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms)
+        atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
+        edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
 
         # Clebsch-Gordan layers central to the network
         atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
-                                                 rad_func_levels, norms, spherical_harmonics)
+                                                 rad_func_levels, norms, sq_norms, spherical_harmonics)
 
         # Construct scalars for network output
         atom_scalars = self.get_scalars_atom(atoms_all)
