@@ -239,6 +239,13 @@ class Engine(object):
             # Calculate loss and backprop
             loss, predict, targets = self.compute_single_batch(data)
             loss.backward()
+            # ####### DEBUG
+            # params = list(self.model.parameters())
+            # print(torch.tensor([torch.max(p0.grad) for p0 in params]))
+            # print(torch.tensor([torch.min(p0.grad) for p0 in params]))
+            # print(torch.tensor([torch.min(torch.abs(p0.grad)) for p0 in params]))
+            # raise Exception
+            # ####### DEBUG
 
             # Step optimizer and learning rate
             self.optimizer.step()
@@ -341,7 +348,6 @@ class ForceEngine(Engine):
         # Standard zero-gradient
         self.optimizer.zero_grad()
 
-
         # Get targets and predictions
         energy_scaled = self._get_target(data, self.stats)
         force_scaled = data['forces'].to(self.device, self.dtype)
@@ -361,15 +367,15 @@ class ForceEngine(Engine):
         energy_pred = self.model(data)
         force_pred = []
         for i, pred in enumerate(energy_pred):
-            print(pred.device, pos_input.device)
-            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0][i]
-            print(force_i.shape)
+            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
+            force_i = force_i[i]
             if self.uses_relative_pos:
+                force_i[~data['edge_mask'][i]] = 0.
                 force_i = rel_pos_deriv_to_forces(force_i)
-                print(force_i[:, 0])
+            else:
+                force_i[~data['atom_mask'][i]] = 0.
             force_pred.append(force_i)
         force_pred = torch.stack(force_pred)
-        print(force_pred.shape)
 
         # Calculate loss and backprop
         loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
@@ -382,7 +388,7 @@ def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scal
     Basic MSE loss on the energies and forces
     """
     energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
-    print(force_pred.shape, force_scaled.shape, 'pred shapes!')
     force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
-    print(energy_mse, force_mse)
-    return energy_mse + force_factor * force_mse
+    # loss = energy_mse + force_factor * force_mse
+    loss = energy_mse # + force_factor * force_mse
+    return loss

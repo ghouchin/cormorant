@@ -285,7 +285,7 @@ def rel_pos_deriv_to_forces(rpd):
     forces : torch Tensor
         Derivative of the output with respect to the atomic positions.
     """
-    N = rpd.shape[-1]
+    N = rpd.shape[-2]
     idx = torch.arange(N)
     rpd[..., idx, idx, :] = 0.
     row_sum = torch.sum(rpd, dim=-2)
