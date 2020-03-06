@@ -229,6 +229,7 @@ class Engine(object):
 
         self.mae, self.rmse, self.batch_time = 0, 0, 0
         all_predict, all_targets = [], []
+    
 
         self.model.train()
         epoch_t = datetime.now()
@@ -328,23 +329,18 @@ class Engine(object):
 
 
 class ForceEngine(Engine):
-    def __init__(self, args, dataloaders, loss_fn, model, optimizer, scheduler, target, restart_epochs,
+    def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
                  bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype,
                  uses_relative_pos=False, save=True, load=True, alpha=0, lr_minibatch=False, predictfile=None, textlog=True):
-        super().__init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
-                         bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, save=True, load=True,
-                         alpha=0, lr_minibatch=False, predictfile=None, textlog=True)
+        super().__init__(args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
+                         bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, save=save, load=load,
+                         alpha=alpha, lr_minibatch=lr_minibatch, predictfile=predictfile, textlog=textlog)
         self.uses_relative_pos = uses_relative_pos
 
     def compute_single_batch(self, data):
         # Standard zero-gradient
         self.optimizer.zero_grad()
 
-        if self.uses_relative_pos:
-            pos_input = data['relative_pos']
-        else:
-            pos_input = data['positions']
-        pos_input.requires_grad_()
 
         # Get targets and predictions
         energy_scaled = self._get_target(data, self.stats)
@@ -352,15 +348,28 @@ class ForceEngine(Engine):
         if self.stats is not None:
             __, sigma = self.stats[self.target]
             force_scaled /= sigma
+        
+        data['relative_pos'] = data['relative_pos'].to(self.device, self.dtype)
+        data['positions'] = data['positions'].to(self.device, self.dtype)
+
+        if self.uses_relative_pos:
+            pos_input = data['relative_pos']
+        else:
+            pos_input = data['positions']
+        pos_input.requires_grad_()
 
         energy_pred = self.model(data)
         force_pred = []
         for i, pred in enumerate(energy_pred):
-            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
+            print(pred.device, pos_input.device)
+            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0][i]
+            print(force_i.shape)
             if self.uses_relative_pos:
                 force_i = rel_pos_deriv_to_forces(force_i)
+                print(force_i[:, 0])
             force_pred.append(force_i)
         force_pred = torch.stack(force_pred)
+        print(force_pred.shape)
 
         # Calculate loss and backprop
         loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
@@ -373,5 +382,7 @@ def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scal
     Basic MSE loss on the energies and forces
     """
     energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
+    print(force_pred.shape, force_scaled.shape, 'pred shapes!')
     force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
+    print(energy_mse, force_mse)
     return energy_mse + force_factor * force_mse
