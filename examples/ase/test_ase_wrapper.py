@@ -3,7 +3,7 @@ from cormorant.ase import ASEInterface
 from ase.io import read
 
 calc = ASEInterface()
-calc.train('test_force.db',force_factor=1., num_epoch=1, batch_size=1)
+calc.train('test_force.db',force_factor=1., num_epoch=100, batch_size=5)
 
 
 
@@ -26,4 +26,6 @@ atoms.set_calculator(calc)
 
 print(atoms.get_potential_energy())
 print(atoms.get_forces())
+import pdb
+pdb.set_trace()
 print("Done!")

@@ -139,8 +139,8 @@ class Engine(object):
 
             # Loop over splits, predict, and output/log predictions
             for split in splits:
-                predict, targets = self.predict(split)
-                self.log_predict(predict, targets, split, description='Best')
+                predict, targets, loss = self.predict(split)
+                self.log_predict(predict, targets, loss, split, description='Best')
         logging.info('Inference phase complete!')
 
     def _warm_restart(self, epoch):
@@ -202,10 +202,10 @@ class Engine(object):
             self._step_lr_epoch()
 
             train_predict, train_targets = self.train_epoch()
-            valid_predict, valid_targets = self.predict('valid')
+            valid_predict, valid_targets, loss  = self.predict('valid')
 
-            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, 'train', epoch=epoch)
-            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, 'valid', epoch=epoch)
+            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, loss, 'train', epoch=epoch)
+            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, loss, 'valid', epoch=epoch)
 
             self._save_checkpoint(valid_loss)
 
