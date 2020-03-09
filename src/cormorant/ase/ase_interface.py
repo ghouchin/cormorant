@@ -153,7 +153,8 @@ class ASEInterface(Calculator):
 
         if 'forces' in properties:
             forces = self._get_forces(energy, corm_input)
-            self.results['forces'] = forces.detach().cpu().numpy()
+            forces *= self.trainer.stats['energy'][1]
+            self.results['forces'] = forces.detach().cpu().numpy()[0][0]
 
     def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_train=True):
         """
@@ -200,7 +201,9 @@ class ASEInterface(Calculator):
 
         for i, pred in enumerate(energy):
             derivative_of_rel_pos = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
-            forces.append(derivative_of_rel_pos[i])
+            force = rel_pos_deriv_to_forces(derivative_of_rel_pos)
+            #forces.append(derivative_of_rel_pos[i])
+            forces.append(force)
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):
