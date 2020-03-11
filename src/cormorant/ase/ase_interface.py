@@ -14,6 +14,7 @@ import torch
 import os
 import logging
 import numpy as np
+from functools import partial
 # from ase.db import connect
 
 
@@ -99,7 +100,7 @@ class ASEInterface(Calculator):
 
         if force_train:
             # Define a loss function.
-            loss_fn = energy_and_force_mse_loss
+            loss_fn = partial(energy_and_force_mse_loss, force_factor=force_factor)
             # Instantiate the training class 
             trainer = ForceEngine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
                              bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch, 
@@ -153,7 +154,7 @@ class ASEInterface(Calculator):
 
         if 'forces' in properties:
             forces = self._get_forces(energy, corm_input)
-            self.results['forces'] = forces.detach().cpu().numpy()
+            self.results['forces'] = forces.detach().cpu().numpy()[0][0]
 
     def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_train=True):
         """
@@ -200,7 +201,8 @@ class ASEInterface(Calculator):
 
         for i, pred in enumerate(energy):
             derivative_of_rel_pos = -torch.autograd.grad(pred, batch['relative_pos'], create_graph=True, retain_graph=True)[0]
-            forces.append(derivative_of_rel_pos[i])
+            force = rel_pos_deriv_to_forces(derivative_of_rel_pos)
+            forces.append(force)
         return torch.stack(forces, dim=0)
 
     def convert_atoms(self, atoms):

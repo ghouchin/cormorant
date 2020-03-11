@@ -139,8 +139,8 @@ class Engine(object):
 
             # Loop over splits, predict, and output/log predictions
             for split in splits:
-                predict, targets = self.predict(split)
-                self.log_predict(predict, targets, split, description='Best')
+                predict, targets, losses = self.predict(split)
+                self.log_predict(predict, targets, losses, split, description='Best')
         logging.info('Inference phase complete!')
 
     def _warm_restart(self, epoch):
@@ -192,6 +192,8 @@ class Engine(object):
             self.scheduler.step()
 
     def train(self):
+        import pdb
+        pdb.set_trace()
         epoch0 = self.epoch
         for epoch in range(epoch0, self.num_epoch):
             self.epoch = epoch
@@ -201,12 +203,13 @@ class Engine(object):
             self._warm_restart(epoch)
             self._step_lr_epoch()
 
-            train_predict, train_targets = self.train_epoch()
-            valid_predict, valid_targets = self.predict('valid')
+            train_predict, train_targets, train_loss  = self.train_epoch()
+            valid_predict, valid_targets, valid_loss = self.predict('valid')
 
-            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, 'train', epoch=epoch)
-            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, 'valid', epoch=epoch)
+            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, train_loss, 'train', epoch=epoch)
+            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, valid_loss, 'valid', epoch=epoch)
 
+            #This needs to be changed so that valid_loss is passed to log_predict and not returned from it!
             self._save_checkpoint(valid_loss)
 
             logging.info('Epoch {} complete!'.format(epoch+1))
@@ -228,6 +231,7 @@ class Engine(object):
         dataloader = self.dataloaders['train']
 
         self.mae, self.rmse, self.batch_time = 0, 0, 0
+        all_loss = 0
         all_predict, all_targets = [], []
     
 
@@ -235,6 +239,8 @@ class Engine(object):
         epoch_t = datetime.now()
         for batch_idx, data in enumerate(dataloader):
             batch_t = datetime.now()
+            #import pdb
+            #pdb.set_trace()
 
             # Calculate loss and backprop
             loss, predict, targets = self.compute_single_batch(data)
@@ -252,9 +258,10 @@ class Engine(object):
             self._step_lr_batch()
 
             targets, predict = targets.detach().cpu(), predict.detach().cpu()
-
+            loss = loss.detach().cpu()
             all_predict.append(predict)
             all_targets.append(targets)
+            all_loss += loss
 
             self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
 
@@ -263,7 +270,8 @@ class Engine(object):
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
-        return all_predict, all_targets
+
+        return all_predict, all_targets, all_loss
 
     def compute_single_batch(self, data):
         # Standard zero-gradient
@@ -283,6 +291,8 @@ class Engine(object):
         start_time = datetime.now()
         logging.info('Starting testing on {} set: '.format(set))
 
+        #import pdb
+        #pdb.set_trace()
         # for batch_idx, data in enumerate(dataloader):
         for data in dataloader:
             
@@ -290,7 +300,7 @@ class Engine(object):
 
             all_targets.append(targets)
             all_predict.append(predict)
-            all_loss.append(predict)
+            all_loss.append(loss.unsqueeze(0))
 
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
@@ -363,14 +373,17 @@ class ForceEngine(Engine):
         else:
             pos_input = data['positions']
         pos_input.requires_grad_()
+        #force_scaled.requires_grad_()
 
         energy_pred = self.model(data)
         force_pred = []
+        import pdb
+        pdb.set_trace()
         for i, pred in enumerate(energy_pred):
             force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
             force_i = force_i[i]
             if self.uses_relative_pos:
-                force_i[~data['edge_mask'][i]] = 0.
+                #force_i[~data['edge_mask'][i]] = 0.
                 force_i = rel_pos_deriv_to_forces(force_i)
             else:
                 force_i[~data['atom_mask'][i]] = 0.
@@ -378,6 +391,7 @@ class ForceEngine(Engine):
         force_pred = torch.stack(force_pred)
 
         # Calculate loss and backprop
+        pdb.set_trace()
         loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
 
         return loss, energy_pred, energy_scaled
@@ -390,5 +404,5 @@ def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scal
     energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
     force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
     # loss = energy_mse + force_factor * force_mse
-    loss = energy_mse # + force_factor * force_mse
+    loss = energy_mse  + force_factor * force_mse
     return loss
