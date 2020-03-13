@@ -14,7 +14,7 @@ from cormorant.data.prepare.utils import cleanup_file
 from ase.db import connect
 import shutil 
 
-def download_dataset_ase(datadir, dataname, name, path, splits=None, calculate_thermo=True, exclude=True, cleanup=True):
+def download_dataset_ase(datadir, dataname, name, path, splits=None, calculate_thermo=True, exclude=True, cleanup=True, force_train=False):
     """
     'Download' and prepare the given ase-db dataset.
     """
@@ -30,13 +30,15 @@ def download_dataset_ase(datadir, dataname, name, path, splits=None, calculate_t
     # If splits are not specified, automatically generate them.
     path=path+name+'.db'
     if splits is None:
-        splits = gen_splits_ase(asedir, path, cleanup)
+        print(asedir)
+        print(path)
+        splits = gen_splits_ase(path, cleanup)
 
     # Process ASE database, and return dictionary of splits
     ase_data = {}
     for split, split_idx in splits.items():
         ase_data[split] = process_ase(
-            path, process_db_row, file_idx_list=split_idx, stack=True)
+            path, process_db_row, file_idx_list=split_idx, force_train=False)
 
 
     # Save processed ASE data into train/validation/test splits

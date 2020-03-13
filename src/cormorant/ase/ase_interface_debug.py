@@ -1,5 +1,5 @@
 from ase.calculators.calculator import Calculator
-from cormorant.models import CormorantASE, CormorantQM9, CormorantMD17
+from cormorant.models import CormorantASE, CormorantASEDebug, CormorantQM9, CormorantMD17
 from cormorant.engine import init_argparse, init_file_paths, init_logger, init_cuda, set_dataset_defaults
 from cormorant.engine import init_optimizer, init_scheduler, rel_pos_deriv_to_forces
 from cormorant.engine import Engine, ForceEngine
@@ -18,7 +18,7 @@ from functools import partial
 # from ase.db import connect
 
 
-class ASEInterface(Calculator):
+class ASEInterfaceDebug(Calculator):
     implemented_properties = ['energy', 'forces']
 
     def __init__(self, model=None):
@@ -84,7 +84,7 @@ class ASEInterface(Calculator):
 
         # WE SHOULD NOT BE INITIALIZING THE MODEL HERE!!!
         if self.model is None:
-            self.model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+            self.model = CormorantASEDebug(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
                                       args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                                       args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                                       max_charge, args.gaussian_mask,
@@ -121,7 +121,7 @@ class ASEInterface(Calculator):
         # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.
         trainer.load_checkpoint()
         self.trainer = trainer
-
+        
         # Train model.
         self.trainer.train()
 

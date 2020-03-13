@@ -13,7 +13,7 @@ from cormorant.nn import OutputPMLP, GetScalarsAtom
 from cormorant.nn import NoLayer
 
 
-class CormorantASE(CGModule):
+class CormorantASEDebug(CGModule):
     """
     Basic Cormorant Network used to train QM9 results in Cormorant paper.
 
@@ -98,23 +98,28 @@ class CormorantASE(CGModule):
         tau_in_atom = self.input_func_atom.tau
         tau_in_edge = self.input_func_edge.tau
 
-        self.cormorant_cg = CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
-                                        tau_pos, num_cg_levels, num_channels,
-                                        level_gain, weight_init, cutoff_type,
-                                        hard_cut_rad, soft_cut_rad, soft_cut_width,
-                                        cat=True, gaussian_mask=gaussian_mask,
-                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
+        self.cormorant_cg = NoLayer()#CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
+                            #            tau_pos, num_cg_levels, num_channels,
+                            #            level_gain, weight_init, cutoff_type,
+                            #            hard_cut_rad, soft_cut_rad, soft_cut_width,
+                            #            cat=True, gaussian_mask=gaussian_mask,
+                            #            device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
 
-        tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
-        tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
+        #tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
+        #print(tau_cg_levels_atom)
+        #tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
 
-        self.get_scalars_atom = GetScalarsAtom(tau_cg_levels_atom,
-                                               device=self.device, dtype=self.dtype)
+        #self.get_scalars_atom = GetScalarsAtom(tau_cg_levels_atom,
+        #                                       device=self.device, dtype=self.dtype)
+        self.get_scalars_atom = GetScalarsAtom([tau_in_atom],
+                                               device=self.device, dtype=self.dtype)  
         self.get_scalars_edge = NoLayer()
 
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
+        #self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
+        #                                    device=self.device, dtype=self.dtype)
         self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
                                             device=self.device, dtype=self.dtype)
         self.output_layer_edge = NoLayer()
@@ -138,8 +143,6 @@ class CormorantASE(CGModule):
         prediction : :obj:`torch.Tensor`
             The output of the layer
         """
-        import pdb
-        pdb.set_trace()
         # Get and prepare the data
         atom_scalars, atom_mask, edge_scalars, edge_mask, atom_vectors = self.prepare_input(data)
         sq_norms = atom_vectors.pow(2).sum(dim=-1)
@@ -154,16 +157,17 @@ class CormorantASE(CGModule):
         edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
 
         # Clebsch-Gordan layers central to the network
-        atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
-                                                 rad_func_levels, norms, sq_norms, spherical_harmonics)
+        #atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
+        #                                         rad_func_levels, norms, sq_norms, spherical_harmonics)
 
         # Construct scalars for network output
-        atom_scalars = self.get_scalars_atom(atoms_all)
-        edge_scalars = self.get_scalars_edge(edges_all)
+        atom_scalars = self.get_scalars_atom(atom_reps_in)
+        #edge_scalars = self.get_scalars_edge(edges_all)
 
         # Prediction in this case will depend only on the atom_scalars. Can make
         # it more general here.
         prediction = self.output_layer_atom(atom_scalars, atom_mask)
+        #prediction = self.output_layer_atom(atom_reps_in, atom_mask) 
 
         # Covariance test
         if covariance_test:

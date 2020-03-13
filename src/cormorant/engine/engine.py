@@ -192,8 +192,6 @@ class Engine(object):
             self.scheduler.step()
 
     def train(self):
-        import pdb
-        pdb.set_trace()
         epoch0 = self.epoch
         for epoch in range(epoch0, self.num_epoch):
             self.epoch = epoch
@@ -202,7 +200,8 @@ class Engine(object):
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
-
+            import pdb
+            pdb.set_trace()
             train_predict, train_targets, train_loss  = self.train_epoch()
             valid_predict, valid_targets, valid_loss = self.predict('valid')
 
@@ -239,8 +238,6 @@ class Engine(object):
         epoch_t = datetime.now()
         for batch_idx, data in enumerate(dataloader):
             batch_t = datetime.now()
-            #import pdb
-            #pdb.set_trace()
 
             # Calculate loss and backprop
             loss, predict, targets = self.compute_single_batch(data)
@@ -291,8 +288,7 @@ class Engine(object):
         start_time = datetime.now()
         logging.info('Starting testing on {} set: '.format(set))
 
-        #import pdb
-        #pdb.set_trace()
+
         # for batch_idx, data in enumerate(dataloader):
         for data in dataloader:
             
@@ -377,13 +373,11 @@ class ForceEngine(Engine):
 
         energy_pred = self.model(data)
         force_pred = []
-        import pdb
-        pdb.set_trace()
         for i, pred in enumerate(energy_pred):
             force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
             force_i = force_i[i]
             if self.uses_relative_pos:
-                #force_i[~data['edge_mask'][i]] = 0.
+                force_i[~data['edge_mask'][i]] = 0.
                 force_i = rel_pos_deriv_to_forces(force_i)
             else:
                 force_i[~data['atom_mask'][i]] = 0.
@@ -391,7 +385,6 @@ class ForceEngine(Engine):
         force_pred = torch.stack(force_pred)
 
         # Calculate loss and backprop
-        pdb.set_trace()
         loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
 
         return loss, energy_pred, energy_scaled
