@@ -3,7 +3,7 @@ from cormorant.ase import ASEInterface
 from ase.io import read
 
 calc = ASEInterface()
-calc.train('test_force.db',force_factor=1., num_epoch=10, batch_size=4)
+calc.train('test_force.db',force_factor=1., num_epoch=10, batch_size=3)
 
 
 
