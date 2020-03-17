@@ -372,20 +372,15 @@ class ForceEngine(Engine):
         else:
             pos_input = data['positions']
         pos_input.requires_grad_()
-        #force_scaled.requires_grad_()
 
         energy_pred = self.model(data)
-        force_pred = []
-        for i, pred in enumerate(energy_pred):
-            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
-            force_i = force_i[i]
-            if self.uses_relative_pos:
-                force_i[~data['edge_mask'][i]] = 0.
-                force_i = rel_pos_deriv_to_forces(force_i)
-            else:
-                force_i[~data['atom_mask'][i]] = 0.
-            force_pred.append(force_i)
-        force_pred = torch.stack(force_pred)
+        Esum = torch.sum(energy_pred, dim=0)
+        force_pred = -torch.autograd.grad(Esum, pos_input, create_graph=True, retain_graph=True)[0]
+        if self.uses_relative_pos:
+            force_pred[~data['edge_mask']] = 0.
+            force_pred = rel_pos_deriv_to_forces(force_pred)
+        else:
+            force_pred[~data['atom_mask']] = 0.
 
         # Calculate loss and backprop
         loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
