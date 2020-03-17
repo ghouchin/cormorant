@@ -30,3 +30,9 @@ __pycache__/
 
 # Sphinx
 docs/_build
+
+src/cormorant/*~
+src/cormorant/*/*~
+src/cormorant/*/*/*~
+examples/*~
+examples/ase/*~
