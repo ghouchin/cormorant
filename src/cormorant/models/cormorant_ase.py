@@ -138,8 +138,6 @@ class CormorantASE(CGModule):
         prediction : :obj:`torch.Tensor`
             The output of the layer
         """
-        import pdb
-        pdb.set_trace()
         # Get and prepare the data
         atom_scalars, atom_mask, edge_scalars, edge_mask, atom_vectors = self.prepare_input(data)
         sq_norms = atom_vectors.pow(2).sum(dim=-1)
@@ -147,7 +145,7 @@ class CormorantASE(CGModule):
 
         # Calculate spherical harmonics and radial functions
         spherical_harmonics = self.sph_harms(atom_vectors)
-        rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
+        rad_func_levels = self.rad_funcs(sq_norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
         atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)

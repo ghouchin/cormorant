@@ -133,7 +133,6 @@ class OutputLinear(nn.Module):
         """
         s = atom_scalars.shape
         atom_scalars = atom_scalars.view((s[0], s[1], -1)).sum(1)  # No masking needed b/c summing over atoms
-
         predict = self.lin(atom_scalars)
 
         predict = predict.squeeze(-1)

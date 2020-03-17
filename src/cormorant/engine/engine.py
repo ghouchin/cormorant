@@ -200,8 +200,6 @@ class Engine(object):
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
-            import pdb
-            pdb.set_trace()
             train_predict, train_targets, train_loss  = self.train_epoch()
             valid_predict, valid_targets, valid_loss = self.predict('valid')
 
@@ -240,9 +238,13 @@ class Engine(object):
             batch_t = datetime.now()
 
             # Calculate loss and backprop
+            #import pdb
+            #pdb.set_trace()
             loss, predict, targets = self.compute_single_batch(data)
             loss.backward()
             # ####### DEBUG
+            params = list(self.model.parameters()) 
+            params[-2].grad
             # params = list(self.model.parameters())
             # print(torch.tensor([torch.max(p0.grad) for p0 in params]))
             # print(torch.tensor([torch.min(p0.grad) for p0 in params]))
@@ -394,6 +396,8 @@ def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scal
     """
     Basic MSE loss on the energies and forces
     """
+    #import pdb
+    #pdb.set_trace()
     energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
     force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
     # loss = energy_mse + force_factor * force_mse

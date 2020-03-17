@@ -5,11 +5,11 @@ import logging
 
 from cormorant.cg_lib import CGModule, SphericalHarmonics
 
-from cormorant.models.cormorant_cg import CormorantCG
+from cormorant.models.cormorant_cg_debug import CormorantCGDebug
 
 from cormorant.nn import RadialFilters
-from cormorant.nn import InputMPNN
-from cormorant.nn import OutputPMLP, GetScalarsAtom
+from cormorant.nn import InputMPNNDebug, InputLinearDebug, InputMPNN
+from cormorant.nn import OutputPMLP, GetScalarsAtom, OutputLinear
 from cormorant.nn import NoLayer
 
 
@@ -90,39 +90,48 @@ class CormorantASEDebug(CGModule):
         num_scalars_in = self.num_species * (self.charge_power + 1)
         num_scalars_out = num_channels[0]
 
+        #self.input_func_atom = InputMPNNDebug(num_scalars_in, num_scalars_out, num_cg_levels,
+        #                                 max_sh, num_mpnn_layers, soft_cut_rad[0], 
+        #                                 soft_cut_width[0], hard_cut_rad[0], 
+        #                                 activation=activation, device=self.device,
+        #                                 dtype=self.dtype)
+        
         self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers,
                                          soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0],
                                          activation=activation, device=self.device, dtype=self.dtype)
+
+        #self.input_func_atom = InputLinearDebug(num_scalars_in, num_scalars_out, bias=True,
+        #                                   device=self.device, dtype=self.dtype)
         self.input_func_edge = NoLayer()
 
         tau_in_atom = self.input_func_atom.tau
         tau_in_edge = self.input_func_edge.tau
 
-        self.cormorant_cg = NoLayer()#CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
-                            #            tau_pos, num_cg_levels, num_channels,
-                            #            level_gain, weight_init, cutoff_type,
-                            #            hard_cut_rad, soft_cut_rad, soft_cut_width,
-                            #            cat=True, gaussian_mask=gaussian_mask,
-                            #            device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
+        self.cormorant_cg = CormorantCGDebug(maxl, max_sh, tau_in_atom, tau_in_edge,
+                                        tau_pos, num_cg_levels, num_channels,
+                                        level_gain, weight_init, cutoff_type,
+                                        hard_cut_rad, soft_cut_rad, soft_cut_width,
+                                        cat=True, gaussian_mask=gaussian_mask,
+                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
 
-        #tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
-        #print(tau_cg_levels_atom)
-        #tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
+        tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
+        tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
 
-        #self.get_scalars_atom = GetScalarsAtom(tau_cg_levels_atom,
-        #                                       device=self.device, dtype=self.dtype)
-        self.get_scalars_atom = GetScalarsAtom([tau_in_atom],
-                                               device=self.device, dtype=self.dtype)  
+        self.get_scalars_atom = GetScalarsAtom(tau_cg_levels_atom,
+                                               device=self.device, dtype=self.dtype)
         self.get_scalars_edge = NoLayer()
 
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
-        #self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
-        #                                    device=self.device, dtype=self.dtype)
         self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
                                             device=self.device, dtype=self.dtype)
-        self.output_layer_edge = NoLayer()
+
+        #self.output_layer_atom = OutputLinear(num_scalars_atom,
+        #                                    device=self.device, dtype=self.dtype)
+        #self.output_layer_atom = OutputLinear(num_scalars_out,
+        #                                    device=self.device, dtype=self.dtype)
+        #self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
             sum(p.nelement() for p in self.parameters())))
@@ -150,24 +159,26 @@ class CormorantASEDebug(CGModule):
 
         # Calculate spherical harmonics and radial functions
         spherical_harmonics = self.sph_harms(atom_vectors)
-        rad_func_levels = self.rad_funcs(norms, edge_mask * (norms > 0))
+        rad_func_levels = self.rad_funcs(sq_norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
         atom_reps_in = self.input_func_atom(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
         edge_net_in = self.input_func_edge(atom_scalars, atom_mask, edge_scalars, edge_mask, norms, sq_norms)
 
         # Clebsch-Gordan layers central to the network
-        #atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
-        #                                         rad_func_levels, norms, sq_norms, spherical_harmonics)
+        atoms_all, edges_all = self.cormorant_cg(atom_reps_in, atom_mask, edge_net_in, edge_mask,
+                                                 rad_func_levels, norms, sq_norms, spherical_harmonics)
 
         # Construct scalars for network output
-        atom_scalars = self.get_scalars_atom(atom_reps_in)
-        #edge_scalars = self.get_scalars_edge(edges_all)
+        atom_scalars = self.get_scalars_atom(atoms_all)
+        edge_scalars = self.get_scalars_edge(edges_all)
 
         # Prediction in this case will depend only on the atom_scalars. Can make
         # it more general here.
+        #prediction = atom_reps_in[0].sum(dim=1).sum(dim=1).sum(dim=1).sum(dim=1)/(atom_reps_in[0].shape[1] *atom_reps_in[0].shape[2]*atom_reps_in[0].shape[3]*atom_reps_in[0].shape[4])   
+
+        #prediction = self.output_layer_atom(atom_reps_in[0], atom_mask)
         prediction = self.output_layer_atom(atom_scalars, atom_mask)
-        #prediction = self.output_layer_atom(atom_reps_in, atom_mask) 
 
         # Covariance test
         if covariance_test:
