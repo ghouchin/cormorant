@@ -40,8 +40,6 @@ def main():
     # Initialize device and data type
     device, dtype = init_cuda(args.cuda, args.dtype)
 
-    import pdb
-    pdb.set_trace()
     # Initialize dataloader
     ntr, nv, nte, datasets, num_species, charge_scale = initialize_datasets(args.num_train, args.num_valid, args.num_test,
                                                                             args.datadir, 'qm9', subtract_thermo=args.subtract_thermo,
