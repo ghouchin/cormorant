@@ -88,7 +88,7 @@ class ASEInterface(Calculator):
                                       args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                                       args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                                       max_charge, args.gaussian_mask,
-                                      args.top, args.input, args.num_mpnn_levels,
+                                      args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
                                       device=device, dtype=dtype)
 
         # Initialize the scheduler and optimizer
