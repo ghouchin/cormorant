@@ -5,15 +5,15 @@ import logging
 
 from cormorant.cg_lib import CGModule, SphericalHarmonics
 
-from cormorant.models.cormorant_cg import CormorantCG
+from cormorant.models.cormorant_cg_debug import CormorantCGDebug
 
 from cormorant.nn import RadialFilters
-from cormorant.nn import InputMPNN
-from cormorant.nn import OutputPMLP, GetScalarsAtom
+from cormorant.nn import InputMPNNDebug, InputLinearDebug, InputMPNN
+from cormorant.nn import OutputPMLP, GetScalarsAtom, OutputLinear
 from cormorant.nn import NoLayer
 
 
-class CormorantASE(CGModule):
+class CormorantASEDebug(CGModule):
     """
     Basic Cormorant Network used to train QM9 results in Cormorant paper.
 
@@ -90,15 +90,24 @@ class CormorantASE(CGModule):
         num_scalars_in = self.num_species * (self.charge_power + 1)
         num_scalars_out = num_channels[0]
 
+        #self.input_func_atom = InputMPNNDebug(num_scalars_in, num_scalars_out, num_cg_levels,
+        #                                 max_sh, num_mpnn_layers, soft_cut_rad[0], 
+        #                                 soft_cut_width[0], hard_cut_rad[0], 
+        #                                 activation=activation, device=self.device,
+        #                                 dtype=self.dtype)
+        
         self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers,
                                          soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0],
                                          activation=activation, device=self.device, dtype=self.dtype)
+
+        #self.input_func_atom = InputLinearDebug(num_scalars_in, num_scalars_out, bias=True,
+        #                                   device=self.device, dtype=self.dtype)
         self.input_func_edge = NoLayer()
 
         tau_in_atom = self.input_func_atom.tau
         tau_in_edge = self.input_func_edge.tau
 
-        self.cormorant_cg = CormorantCG(maxl, max_sh, tau_in_atom, tau_in_edge,
+        self.cormorant_cg = CormorantCGDebug(maxl, max_sh, tau_in_atom, tau_in_edge,
                                         tau_pos, num_cg_levels, num_channels,
                                         level_gain, weight_init, cutoff_type,
                                         hard_cut_rad, soft_cut_rad, soft_cut_width,
@@ -117,7 +126,12 @@ class CormorantASE(CGModule):
 
         self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
                                             device=self.device, dtype=self.dtype)
-        self.output_layer_edge = NoLayer()
+
+        #self.output_layer_atom = OutputLinear(num_scalars_atom,
+        #                                    device=self.device, dtype=self.dtype)
+        #self.output_layer_atom = OutputLinear(num_scalars_out,
+        #                                    device=self.device, dtype=self.dtype)
+        #self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
             sum(p.nelement() for p in self.parameters())))
@@ -161,6 +175,9 @@ class CormorantASE(CGModule):
 
         # Prediction in this case will depend only on the atom_scalars. Can make
         # it more general here.
+        #prediction = atom_reps_in[0].sum(dim=1).sum(dim=1).sum(dim=1).sum(dim=1)/(atom_reps_in[0].shape[1] *atom_reps_in[0].shape[2]*atom_reps_in[0].shape[3]*atom_reps_in[0].shape[4])   
+
+        #prediction = self.output_layer_atom(atom_reps_in[0], atom_mask)
         prediction = self.output_layer_atom(atom_scalars, atom_mask)
 
         # Covariance test

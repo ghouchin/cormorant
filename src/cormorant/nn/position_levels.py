@@ -6,6 +6,76 @@ from math import pi
 from cormorant.so3_lib import SO3Tau, SO3Scalar
 
 
+
+class DistanceBasis(torch.nn.Module):
+    def __init__(self, basis_dim, cutoff=10.0, envelope='physnet', device=None, dtype=None):
+        super().__init__()
+        delta = 1 / (2 * basis_dim)
+        qs = torch.linspace(delta, 1 - delta, basis_dim)
+        self.device, self.dtype = device, dtype
+        self.cutoff = cutoff
+        self.envelope = envelope
+        self.register_buffer('mus', cutoff * qs ** 2)
+        self.register_buffer('sigmas', (1 + cutoff * qs) / 7)
+
+        self.mus = self.mus.to(self.device)
+        self.sigmas = self.sigmas.to(self.device)
+        self.basis_dim = basis_dim
+
+    def forward(self, dists):
+        if self.envelope == 'physnet':
+            dists_rel = dists / self.cutoff
+            envelope = torch.where(
+                dists_rel > 1,
+                dists.new_zeros(1),
+                1 - 6 * dists_rel ** 5 + 15 * dists_rel ** 4 - 10 * dists_rel ** 3,
+            )
+        elif self.envelope == 'nocusp':
+            envelope = dists ** 2 * torch.exp(-dists)
+        else:
+            assert False
+        return envelope[..., None] * torch.exp(
+            -(dists[..., None] - self.mus) ** 2 / self.sigmas ** 2)
+
+    def extra_repr(self):
+        return ', '.join(
+            f'{lbl}={val!r}'
+            for lbl, val in [
+                ('basis_dim', len(self.mus)),
+                ('cutoff', self.cutoff),
+                ('envelope', self.envelope),
+            ]
+        )
+
+
+class PNetRadialFilter(torch.nn.Module):
+    """
+    Generate a set of learnable scalar functions for the aggregation/point-wise
+    convolution step.  Uses the functional form from the dlqmc paper.
+
+    One set of radial filters is created for each irrep (l = 0, ..., max_sh).
+    """
+    def __init__(self, max_sh, dist_object, num_levels, device=None, dtype=None):
+        super().__init__()
+        self.dist_object = dist_object
+        self.zero = torch.tensor(0, device=device, dtype=dtype)
+        self.device, self.dtype = device, dtype
+        self.num_levels = num_levels
+        self.tau = [SO3Tau([dist_object.basis_dim] * (max_sh[i] + 1)) for i in range(num_levels)]
+        self.max_sh = max_sh
+
+    def forward(self, dists, base_mask):
+        edges = self.dist_object(dists)
+        real_edges = torch.where(base_mask.unsqueeze(-1), edges, self.zero)
+        complex_edges = torch.zeros(edges.shape, dtype=self.dtype, device=self.device)
+        edges = torch.stack((real_edges, complex_edges), dim=-1)
+        #rad_funcs = [SO3Scalar([edges] * (self.max_sh[i] + 1)) for i in range(self.num_levels)]
+        rad_funcs = [edges * (self.max_sh[i] + 1) for i in range(self.num_levels)]
+        # print([ri.shapes for ri in rad_funcs])
+        return SO3Scalar(rad_funcs)
+
+
+
 class RadialFilters(nn.Module):
     """
     Generate a set of learnable scalar functions for the aggregation/point-wise

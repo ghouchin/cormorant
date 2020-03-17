@@ -5,7 +5,7 @@ from cormorant.data.prepare.md17 import download_dataset_md17
 from cormorant.data.prepare.qm9 import download_dataset_qm9
 from cormorant.data.prepare.ase import download_dataset_ase
 
-def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, force_download=False, name=None, path=None):
+def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, force_download=False, name=None, path=None, force_train=False):
     """
     Download and process dataset.
 
@@ -81,7 +81,7 @@ def prepare_dataset(datadir, dataset, subset=None, splits=None, cleanup=True, fo
             download_dataset_md17(datadir, dataset, subset,
                                   splits, cleanup=cleanup)
         elif dataset.lower().startswith('ase-db'):
-            download_dataset_ase(datadir, dataset, name, path, splits, cleanup=cleanup)
+            download_dataset_ase(datadir, dataset, name, path, splits, cleanup=cleanup, force_train=False)
         else:
             raise ValueError(
                 'Incorrect choice of dataset! Must chose qm9/md17!')

@@ -200,13 +200,14 @@ class Engine(object):
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
+            train_predict, train_targets, train_loss  = self.train_epoch()
+            valid_predict, valid_targets, valid_loss = self.predict('valid')
 
-            train_predict, train_targets = self.train_epoch()
-            valid_predict, valid_targets, loss  = self.predict('valid')
+            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, train_loss, 'train', epoch=epoch)
+            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, valid_loss, 'valid', epoch=epoch)
 
-            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, loss, 'train', epoch=epoch)
-            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, loss, 'valid', epoch=epoch)
 
+            #This needs to be changed so that valid_loss is passed to log_predict and not returned from it!
             self._save_checkpoint(valid_loss)
 
             logging.info('Epoch {} complete!'.format(epoch+1))
@@ -228,6 +229,7 @@ class Engine(object):
         dataloader = self.dataloaders['train']
 
         self.mae, self.rmse, self.batch_time = 0, 0, 0
+        all_loss = 0
         all_predict, all_targets = [], []
     
 
@@ -237,9 +239,13 @@ class Engine(object):
             batch_t = datetime.now()
 
             # Calculate loss and backprop
+            #import pdb
+            #pdb.set_trace()
             loss, predict, targets = self.compute_single_batch(data)
             loss.backward()
             # ####### DEBUG
+            params = list(self.model.parameters()) 
+            params[-2].grad
             # params = list(self.model.parameters())
             # print(torch.tensor([torch.max(p0.grad) for p0 in params]))
             # print(torch.tensor([torch.min(p0.grad) for p0 in params]))
@@ -252,9 +258,10 @@ class Engine(object):
             self._step_lr_batch()
 
             targets, predict = targets.detach().cpu(), predict.detach().cpu()
-
+            loss = loss.detach().cpu()
             all_predict.append(predict)
             all_targets.append(targets)
+            all_loss += loss
 
             self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
 
@@ -263,7 +270,8 @@ class Engine(object):
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
-        return all_predict, all_targets
+
+        return all_predict, all_targets, all_loss
 
     def compute_single_batch(self, data):
         # Standard zero-gradient
@@ -283,6 +291,7 @@ class Engine(object):
         start_time = datetime.now()
         logging.info('Starting testing on {} set: '.format(set))
 
+
         # for batch_idx, data in enumerate(dataloader):
         for data in dataloader:
             
@@ -290,7 +299,7 @@ class Engine(object):
 
             all_targets.append(targets)
             all_predict.append(predict)
-            all_loss.append(predict)
+            all_loss.append(loss.unsqueeze(0))
 
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
@@ -363,6 +372,7 @@ class ForceEngine(Engine):
         else:
             pos_input = data['positions']
         pos_input.requires_grad_()
+        #force_scaled.requires_grad_()
 
         energy_pred = self.model(data)
         force_pred = []
@@ -387,8 +397,10 @@ def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scal
     """
     Basic MSE loss on the energies and forces
     """
+    #import pdb
+    #pdb.set_trace()
     energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
     force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
     # loss = energy_mse + force_factor * force_mse
-    loss = energy_mse # + force_factor * force_mse
+    loss = energy_mse  + force_factor * force_mse
     return loss

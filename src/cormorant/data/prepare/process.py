@@ -206,7 +206,7 @@ def process_xyz_gdb9(datafile):
     return molecule
 
 
-def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, forcetrain=False):
+def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_train=False):
     """
     Takes an ase database and apply a predefined data processing script to each
     entry. Data can be stored in a directory, tarfile, or zipfile. An optional
@@ -237,7 +237,7 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, forcet
     with connect(data) as db:
         for id in file_idx_list:
             atoms = db.get_atoms(id=id,attach_calculator=False)
-            molecules.append(process_file_fn(atoms, forcetrain))
+            molecules.append(process_file_fn(atoms, force_train))
 
     # Check that all molecules have the same set of items in their dictionary:
     props = molecules[0].keys()

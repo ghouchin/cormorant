@@ -5,6 +5,9 @@ from cormorant.nn.generic_levels import BasicMLP
 from cormorant.nn.position_levels import RadPolyTrig
 from cormorant.nn.mask_levels import MaskLevel
 
+
+#from cormorant.nn.position_levels import PNetRadialFilter, DistanceBasis
+
 from cormorant.so3_lib import SO3Tau, SO3Vec
 
 
@@ -144,6 +147,7 @@ class InputMPNN(nn.Module):
 
         for chan_in, chan_out in zip(channels_lvls[:-1], channels_lvls[1:]):
             rad_filt = RadPolyTrig(0, basis_set, chan_in, mix='real', device=device, dtype=dtype)
+    
             mask = MaskLevel(1, hard_cut_rad, soft_cut_rad, soft_cut_width, ['soft', 'hard'], device=device, dtype=dtype)
             mlp = BasicMLP(2*chan_in, chan_out, num_hidden=num_hidden, layer_width=layer_width, device=device, dtype=dtype)
 
@@ -191,7 +195,7 @@ class InputMPNN(nn.Module):
         # the role of the adjacency matrix.
         for mlp, rad_filt, mask in zip(self.mlps, self.rad_filts, self.masks):
             # Construct the learnable radial functions
-            rad = rad_filt(norms, edge_mask)
+            rad = rad_filt(sq_norms, edge_mask)
 
             # TODO: Real-valued SO3Scalar so we don't need any hacks
             # Convert to a form that MaskLevel expects
