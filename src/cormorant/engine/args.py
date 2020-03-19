@@ -141,7 +141,7 @@ def setup_shared_args(parser):
                         help='Cutoff in CG operations (default: [3])')
     parser.add_argument('--max-sh', nargs='*', type=int, default=[3], metavar='N',
                         help='Number of spherical harmonic powers to use (default: [3])')
-    parser.add_argument('--num-channels', nargs='*', type=int, default=[10], metavar='N',
+    parser.add_argument('--num-channels', nargs='*', type=int, default=[3], metavar='N',
                         help='Number of channels to allow after mixing (default: [10])')
     parser.add_argument('--level-gain', nargs='*', type=float, default=[10.], metavar='N',
                         help='Gain at each level (default: [10.])')
