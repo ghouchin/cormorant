@@ -43,14 +43,14 @@ class ASEInterface(Calculator):
         calc = cls(model)
         return calc
 
-    def train(self, database, workdir=None, force_factor=0., num_epoch=256, lr_init=5.e-4, lr_final=5.e-6, batch_size=20):
+    def train(self, database, workdir=None, force_factor=0., num_epoch=256, num_channels=3, lr_init=5.e-4, lr_final=5.e-6, batch_size=20):
         # This makes printing tensors more readable.
         torch.set_printoptions(linewidth=1000, threshold=100000)
-
         logging.getLogger('')
 
         # Initialize arguments -- Just
         args = init_argparse('ase-db')
+        args.num_channels = num_channels
 
         if workdir is not None:
             args.workdir = workdir
