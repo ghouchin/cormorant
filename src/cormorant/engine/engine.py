@@ -291,10 +291,14 @@ class Engine(object):
 
         for data in dataloader:
             
+<<<<<<< HEAD
             loss, mse, mae, predict, targets = self.compute_single_batch(data)
             loss = loss.detach().cpu()
             mse = mse.detach().cpu()
             mae = mae.detach().cpu()
+=======
+            loss, predict, targets = self.compute_single_batch(data)
+>>>>>>> feature/forces_and_knockout
             predict, targets = targets.detach().cpu(), predict.detach().cpu()
             all_targets.append(targets)
             all_predict.append(predict)
