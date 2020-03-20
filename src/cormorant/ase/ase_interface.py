@@ -30,20 +30,28 @@ class ASEInterface(Calculator):
 
     @classmethod
     # def load(cls, filename, num_species, included_species=None):
-    def load(cls, filename, num_species):
+    def load(cls, filename):
         saved_run = torch.load(filename)
         args = saved_run['args']
-        charge_scale = max(included_species)
-
+        max_charge = saved_run['max_charge']#max(included_species)
+        num_species = saved_run['num_species']
         # Initialize device and data type
         device, dtype = init_cuda(args.cuda, args.dtype)
-        model = CormorantASE(*args, num_species=num_species, charge_scale=charge_scale,
-                             device=device, dtype=dtype)
+        model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+                                      args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
+                                      args.weight_init, args.level_gain, args.charge_power, args.basis_set,
+                                      max_charge, args.gaussian_mask,
+                                      args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
+                                      device=device, dtype=dtype)
+        #model = CormorantASE(*args, num_species=num_species, charge_scale=charge_scale,
+        #                     device=device, dtype=dtype)
         model.load_state_dict(saved_run['model_state'])
         calc = cls(model)
+        calc.stats = saved_run['stats']
+        calc.included_species = saved_run['included_species']  
         return calc
 
-    def train(self, database, workdir=None, force_factor=0., num_epoch=256, num_channels=3, lr_init=5.e-4, lr_final=5.e-6, batch_size=20):
+    def train(self, database, workdir=None, force_factor=0., num_epoch=256, num_channels=3, lr_init=5.e-4, lr_final=5.e-6, batch_size=20, label=None):
         # This makes printing tensors more readable.
         torch.set_printoptions(linewidth=1000, threshold=100000)
         logging.getLogger('')
@@ -51,6 +59,8 @@ class ASEInterface(Calculator):
         # Initialize arguments -- Just
         args = init_argparse('ase-db')
         args.num_channels = num_channels
+        if label is not None:
+            args.prefix = label
 
         if workdir is not None:
             args.workdir = workdir
@@ -127,6 +137,7 @@ class ASEInterface(Calculator):
 
         # Test predictions on best model and also last checkpointed model.
         self.trainer.evaluate()
+        self.stats = self.trainer.stats
 
     def calculate(self, atoms, properties, system_changes):
         """
@@ -143,18 +154,20 @@ class ASEInterface(Calculator):
         """
         Calculator.calculate(self, atoms)
 
+
         corm_input = self.convert_atoms(atoms)
         # Grad must be called for each predicted energy in the corm_input
         if not corm_input['relative_pos'].requires_grad and 'forces' in properties:
             print('calling force!')
             corm_input['relative_pos'].requires_grad_()
 
+        mu, sigma = self.stats['energy']
         energy = self.model(corm_input)
-        self.results['energy'] = energy.detach().cpu().numpy()
+        self.results['energy'] = ( energy.detach().cpu() * sigma + mu).numpy()[0]
+        
 
         if 'forces' in properties:
-            forces = self._get_forces(energy, corm_input)
-            forces *= self.trainer.stats['energy'][1]
+            forces = self._get_forces(energy, corm_input)*sigma
             self.results['forces'] = forces.detach().cpu().numpy()[0][0]
 
     def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_train=True):

@@ -55,7 +55,6 @@ class Engine(object):
     def _save_checkpoint(self, valid_loss):
         if not self.save:
             return
-
         save_dict = {'args': self.args,
                      'model_state': self.model.state_dict(),
                      'optimizer_state': self.optimizer.state_dict(),
@@ -63,7 +62,10 @@ class Engine(object):
                      'epoch': self.epoch,
                      'minibatch': self.minibatch,
                      'best_loss': self.best_loss,
-                     'stat': self.stats}
+                     'stats': self.stats,
+                     'max_charge': self.dataloaders['train'].dataset.max_charge,
+                     'included_species': self.dataloaders['train'].dataset.included_species,
+                     'num_species': self.dataloaders['train'].dataset.num_species}
 
         if (valid_loss < self.best_loss):
             self.best_loss = save_dict['best_loss'] = valid_loss

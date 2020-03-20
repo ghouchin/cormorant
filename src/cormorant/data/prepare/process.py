@@ -236,7 +236,7 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
 
     with connect(data) as db:
         for id in file_idx_list:
-            atoms = db.get_atoms(id=id,attach_calculator=False)
+            atoms = db.get_atoms(id=int(id),attach_calculator=False)
             molecules.append(process_file_fn(atoms, force_train))
 
     # Check that all molecules have the same set of items in their dictionary:
@@ -287,7 +287,8 @@ def process_db_row(data, forcetrain=False):
 
 def _process_structure(data):
     #num_atoms = data.natoms
-    num_atoms = data.get_number_of_atoms()
+    #num_atoms = data.get_number_of_atoms()
+    num_atoms = data.get_global_number_of_atoms()
 
     # atom_charges, atom_positions, rel_positions = [], [], []
     # for i, ri in enumerate(data.positions):

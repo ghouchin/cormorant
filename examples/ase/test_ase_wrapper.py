@@ -7,7 +7,7 @@ from ase.io import read
 #@profile
 def main():
     calc = ASEInterface()
-    calc.train('test_force.db',force_factor=1., num_epoch=10, batch_size=16, num_channels=3)
+    calc.train('small.db',force_factor=0, num_epoch=2, batch_size=20, num_channels=3)
 
 
 
@@ -15,8 +15,8 @@ def main():
     atoms = read('test.traj')
     e_DFT=atoms.get_potential_energy()
     f_DFT=atoms.get_forces()
-    #print(e_DFT)
-    #print(f_DFT)
+    print(e_DFT)
+    print(f_DFT)
     
     #included_species = []
     #for i in range(len(atoms)):
@@ -30,7 +30,7 @@ def main():
     atoms.set_calculator(calc)
     
     print(atoms.get_potential_energy())
-    #print(atoms.get_forces())
+    print(atoms.get_forces())
     print("Done!")
 
 

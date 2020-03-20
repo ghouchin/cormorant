@@ -70,16 +70,14 @@ def gen_splits_ase(path, cleanup=True):
 
     shutil.copy(path, 'temp.db')
     with connect('temp.db') as db:
-        Nmols = db.count()
-        index = np.linspace(1, Nmols, Nmols)
-
-        for i in range(Nmols):
-            row=db.get(id=Nmols-i)
+        index = []
+        for row in db.select():
             try:
                 calc=row['calculator']
+                index.append(row.id)
             except (KeyError, AttributeError):
-                del db[Nmols-i]
-                index=np.delete(index,Nmols-i-1)
+                del db[row.id]
+
 
         Nmols = db.count()
 
@@ -100,6 +98,7 @@ def gen_splits_ase(path, cleanup=True):
     assert(len(extra) == 0), 'Split was inexact {} {} {} {}'.format(
         len(train), len(valid), len(test), len(extra))
 
+    index = np.array(index)
     train = index[train]
     valid = index[valid]
     test = index[test]

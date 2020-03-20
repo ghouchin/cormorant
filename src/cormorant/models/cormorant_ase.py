@@ -47,7 +47,7 @@ class CormorantASE(CGModule):
                  top, input, num_mpnn_layers, activation='leakyrelu',
                  device=None, dtype=None, cg_dict=None,
                  use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
-                 use_ag=True, use_sq=True, use_id=True, rad_func_type='old'):
+                 use_ag=True, use_sq=True, use_id=True):#, rad_func_type='old'):
 
         logging.info('Initializing network!')
         level_gain = expand_var_list(level_gain, num_cg_levels)
