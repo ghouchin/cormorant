@@ -279,6 +279,7 @@ class Engine(object):
         predict = predict/data['num_atoms'].to(self.device)
         targets = targets/data['num_atoms'].to(self.device)
 
+
         return loss, mse, mae, predict, targets
 
     def predict(self, set='valid'):
@@ -320,7 +321,7 @@ class Engine(object):
         mu, sigma = self.stats[self.target]
         mae_units = sigma*mae
         rmse_units = sigma*rmse
-        loss_units = sigma*loss
+        loss_units = sigma*sigma*loss
 
 
         datastrings = {'train': 'Training', 'test': 'Testing', 'valid': 'Validation'}
@@ -364,7 +365,7 @@ class ForceEngine(Engine):
             force_scaled /= sigma
         s = force_scaled.shape
 
-        force_scaled = (force_scaled.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s) #hack to get force on an atom divided by num_atoms
+        #force_scaled = (force_scaled.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s) #hack to get force on an atom divided by num_atoms
         
         data['relative_pos'] = data['relative_pos'].to(self.device, self.dtype)
         data['positions'] = data['positions'].to(self.device, self.dtype)
@@ -385,7 +386,7 @@ class ForceEngine(Engine):
         else:
             force_pred[~data['atom_mask']] = 0.
 
-        force_pred = (force_pred.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s)
+        #force_pred = (force_pred.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s)
 
         # Calculate loss and backprop
         loss, mse = self.loss_fn(energy_pred/data['num_atoms'].to(self.device), force_pred, energy_scaled/data['num_atoms'].to(self.device), force_scaled)

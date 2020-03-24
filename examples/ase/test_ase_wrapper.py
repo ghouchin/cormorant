@@ -7,7 +7,7 @@ from ase.io import read
 #@profile
 def main():
     calc = ASEInterface()
-    calc.train('small.db',force_factor=0, num_epoch=2, batch_size=20, num_channels=3)
+    calc.train('test_force.db',force_factor=0, num_epoch=10, batch_size=20, num_channels=3)
 
 
 
