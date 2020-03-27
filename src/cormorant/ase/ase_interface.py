@@ -81,7 +81,7 @@ class ASEInterface(Calculator):
         force_train = (force_factor != 0.)
         num_train = args.num_train
         #num_train = 10
-        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, force_train=force_train)
+        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, force_download = args.force_download, force_train=force_train)
 
         # Construct PyTorch dataloaders from datasets
         dataloaders = {split: DataLoader(dataset,
@@ -170,7 +170,7 @@ class ASEInterface(Calculator):
             forces = self._get_forces(energy, corm_input)*sigma
             self.results['forces'] = forces.detach().cpu().numpy()[0][0]
 
-    def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_train=True):
+    def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_download = False, force_train=True):
         """
         Initialized the ASE database into a format that the Pytorch routines can use
 
@@ -199,16 +199,85 @@ class ASEInterface(Calculator):
         # Set the number of points based upon the arguments
         num_pts = {'train': num_train, 'test': num_test, 'valid': num_valid}
 
+        datafiles = self.prepare_dataset(
+            datadir, database, splits, force_download = force_download, force_train=force_train)
+
         # Process ASE database, and return dictionary of splits
         ase_data = {}
-        for split, split_idx in splits.items():
-            ase_data[split] = process_ase(database, process_db_row, file_idx_list=split_idx, force_train=force_train)
+        #for split, split_idx in splits.items():
+        #    ase_data[split] = process_ase(database, process_db_row, file_idx_list=split_idx, force_train=force_train)
+        for split, datafile in datafiles.items():
+            with np.load(datafile) as f:
+                ase_data[split] = {key: torch.from_numpy(
+                    val) for key, val in f.items()}
+
 
         # Convert to Cormorant ProcessedDataset
         num_train, num_valid, num_test, datasets, num_species, max_charge = convert_to_ProcessedDatasets(ase_data, num_pts, subtract_thermo=False)
         self.included_species = datasets['train'].included_species
 
         return num_train, num_valid, num_test, datasets, num_species, max_charge
+
+    def prepare_dataset(self, datadir, database, splits, force_download = False, force_train=False):
+        name = os.path.basename(database).split('.')[0]
+        dataset_dir = [datadir, name]
+        # Names of splits, based upon keys if split dictionary exists, elsewise default to train/valid/test.
+        split_names = splits.keys() if splits is not None else [
+            'train', 'valid', 'test']
+        # Assume one data file for each split
+        datafiles = {split: os.path.join(
+            *(dataset_dir + [split + '.npz'])) for split in split_names}
+
+        # Check datafiles exist
+        datafiles_checks = [os.path.exists(datafile)
+                            for datafile in datafiles.values()]
+
+        # Check if prepared dataset exists, and if not set flag to download below.
+        # Probably should add more consistency checks, such as number of datapoints, etc...
+        new_download = False
+        if all(datafiles_checks):
+            logging.info('Dataset exists and is processed.')
+        elif all(not x for x in datafiles_checks):
+            # If checks are failed.
+            new_download = True
+        else:
+            raise ValueError(
+                'Dataset only partially processed. Try deleting {} and running again to download/process.'.format(os.path.join(dataset_dir)))
+
+        # If need to download dataset, pass to appropriate downloader
+        if new_download or force_download:
+            logging.info('Dataset does not exist. Downloading!')
+            # Define directory for which data will be output.
+            asedir = os.path.join(*[datadir, name])
+
+            # Important to avoid a race condition
+            os.makedirs(asedir, exist_ok=True)
+
+            logging.info(
+                'Processing the given ASE Database. Output will be in directory: {}.'.format(asedir))
+
+
+            # Process ASE database, and return dictionary of splits
+            ase_data = {}
+            for split, split_idx in splits.items():
+                ase_data[split] = process_ase(
+                    database, process_db_row, file_idx_list=split_idx, force_train=force_train)
+
+
+            # Save processed ASE data into train/validation/test splits
+            logging.info('Saving processed data:')
+            import pdb
+            pdb.set_trace()
+            for split, data in ase_data.items():
+                data = {key: torch.stack(val) for key, val in data.items()}
+                data['energy'] = data['energy'].squeeze(1)
+                savedir = os.path.join(asedir, split+'.npz')
+                np.savez_compressed(savedir, **data)
+
+            logging.info('Processing/saving complete!')
+
+        return datafiles
+
 
     def _get_forces(self, energy, batch):
         forces = []

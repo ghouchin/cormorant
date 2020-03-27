@@ -275,10 +275,10 @@ def process_db_row(data, forcetrain=False):
     # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
     if forcetrain:
         prop_strings = ['energy', 'forces']
-        mol_props = [data.get_potential_energy(), data.get_forces()]
+        mol_props = [torch.Tensor([data.get_potential_energy()]), torch.from_numpy(data.get_forces())]
     else:
         prop_strings = ['energy']
-        mol_props = [data.get_potential_energy()]
+        mol_props = [torch.Tensor([data.get_potential_energy()])]
 
     mol_props = dict(zip(prop_strings, mol_props))
     molecule.update(mol_props)
@@ -304,9 +304,11 @@ def _process_structure(data):
     #     rel_positions.append(rel_pos)
 
     rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
+    rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])    
     rel_positions = torch.from_numpy(rel_positions)
     atom_positions = torch.from_numpy(data.positions)
     atom_charges = torch.from_numpy(data.numbers).float()
+    
 
     molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': rel_positions}
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
