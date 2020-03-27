@@ -266,10 +266,9 @@ class ASEInterface(Calculator):
 
             # Save processed ASE data into train/validation/test splits
             logging.info('Saving processed data:')
-            import pdb
-            pdb.set_trace()
             for split, data in ase_data.items():
-                data = {key: torch.stack(val) for key, val in data.items()}
+                #data = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in data.items()}
+                #data = {key: torch.stack(val) for key, val in data.items()}
                 data['energy'] = data['energy'].squeeze(1)
                 savedir = os.path.join(asedir, split+'.npz')
                 np.savez_compressed(savedir, **data)

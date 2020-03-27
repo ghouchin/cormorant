@@ -196,9 +196,11 @@ class CormorantASE(CGModule):
         charge_power, charge_scale, device, dtype = self.charge_power, self.charge_scale, self.device, self.dtype
 
         # atom_positions = data['positions'].to(device, dtype)
-        atom_rel_positions = data['relative_pos'].to(device, dtype)  # relative position vectors
         one_hot = data['one_hot'].to(device, dtype)
         charges = data['charges'].to(device, dtype)
+
+        size = charges.shape[1]
+        atom_rel_positions = data['relative_pos'].to(device, dtype)[:,:size,:size,...]  # relative position vectors 
 
         atom_mask = data['atom_mask'].to(device)
         edge_mask = data['edge_mask'].to(device)

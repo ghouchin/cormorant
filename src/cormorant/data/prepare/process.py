@@ -5,6 +5,7 @@ import tarfile
 import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 from ase.neighborlist import mic
+from cormorant.data.collate import batch_stack
 
 charge_dict = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9,
                'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17,
@@ -246,6 +247,9 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
     # Convert list-of-dicts to dict-of-lists
     molecules = {prop: [mol[prop] for mol in molecules] for prop in props}
 
+    #need to pad and stack if saving 
+    molecules = {key: batch_stack(val, edge_mat=not bool(3-len(val[0].shape)) ) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
+    #molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
     # If stacking is desireable, pad and then stack.
     # if stack:
     #     molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}

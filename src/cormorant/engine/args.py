@@ -150,10 +150,10 @@ def setup_shared_args(parser):
                         help='Maximum power to take in one-hot (default: 2)')
 
     parser.add_argument('--hard-cutoff', dest='hard_cut_rad',
-                        type=float, default=6.5, nargs='*', metavar='N',
+                        type=float, default=2.8, nargs='*', metavar='N',
                         help='Radius of HARD cutoff in Angstroms (default: 1.73)')
     parser.add_argument('--soft-cutoff', dest='soft_cut_rad', type=float,
-                        default=3, nargs='*', metavar='N',
+                        default=1.73, nargs='*', metavar='N',
                         help='Radius of SOFT cutoff in Angstroms (default: 1.73)')
     parser.add_argument('--soft-width', dest='soft_cut_width',
                         type=float, default=0.2, nargs='*', metavar='N',
