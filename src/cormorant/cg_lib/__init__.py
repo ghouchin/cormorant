@@ -12,3 +12,4 @@ from cormorant.cg_lib.cg_ops import CGProduct, cg_product
 
 from cormorant.cg_lib.spherical_harmonics import spherical_harmonics, spherical_harmonics_rel, pos_to_rep, rep_to_pos
 from cormorant.cg_lib.spherical_harmonics import SphericalHarmonics, SphericalHarmonicsRel
+from cormorant.cg_lib.spherical_harmonics_debug import SphericalHarmonicsRelDebug

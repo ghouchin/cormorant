@@ -1,15 +1,13 @@
 import numpy as np
-from cormorant.ase import ASEInterface
+from cormorant.ase.ase_interface_debug import ASEInterfaceDebug
 from ase.io import read
 #from pytorch_memlab import profile
 
 
 #@profile
 def main():
-    calc = ASEInterface()
-    import pdb
-    pdb.set_trace()
-    calc.train('same_size.db',force_factor=0, num_epoch=10, batch_size=20, num_channels=3)
+    calc = ASEInterfaceDebug()
+    calc.train('same_size.db',force_factor=0, num_epoch=10, batch_size=2, num_channels=3)
 
 
 

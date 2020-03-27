@@ -5,6 +5,8 @@ import tarfile
 import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 from ase.neighborlist import mic
+from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
+import pdb
 
 charge_dict = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9,
                'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17,
@@ -302,12 +304,124 @@ def _process_structure(data):
     #         rij = np.array(ri)-np.array(rj)
     #         rel_pos.append(list(mic(rij, data.cell)))
     #     rel_positions.append(rel_pos)
-
+    #import pdb
+    #pdb.set_trace()
     rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
+    #rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])
     rel_positions = torch.from_numpy(rel_positions)
     atom_positions = torch.from_numpy(data.positions)
     atom_charges = torch.from_numpy(data.numbers).float()
 
     molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': rel_positions}
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
+    return molecule
+
+def process_db_row_debug(data, forcetrain=False, cutoff=None):
+    """
+    Read an ase-db row and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type.
+
+    Parameters
+    ----------
+    data : ASE atoms object
+    cutoff : float 
+        hard_cutoff for calculating the neighborlist
+
+    Returns
+    -------
+    molecule : dict
+        Dictionary containing the molecular properties of the associated file object.
+
+    Notes
+    -----
+    """
+    molecule = _process_structure_neighborlist(data, cutoff)
+
+    # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
+    if forcetrain:
+        prop_strings = ['energy', 'forces']
+        mol_props = [data.get_potential_energy(), data.get_forces()]
+    else:
+        prop_strings = ['energy']
+        mol_props = [data.get_potential_energy()]
+
+    mol_props = dict(zip(prop_strings, mol_props))
+    molecule.update(mol_props)
+    return molecule
+
+
+
+def _process_structure_neighborlist(data, cutoff):
+    num_atoms = data.get_global_number_of_atoms()
+    #pdb.set_trace()
+    #rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
+    #rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])
+    #rel_positions = torch.from_numpy(rel_positions)
+    atom_positions = torch.from_numpy(data.positions)
+    atom_charges = torch.from_numpy(data.numbers).float()
+    nl = NeighborList(cutoffs = [cutoff/2] * num_atoms, self_interaction=False, bothways = True, primitive=NewPrimitiveNeighborList)
+    nl.update(data)
+    cell = torch.from_numpy(data.cell.array)
+    molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions}
+    molecule = {key: torch.tensor(val) for key, val in molecule.items()}
+    neighborlist = []
+
+    for i in range(num_atoms):
+        indices, offsets = nl.get_neighbors(i)
+        neighborlist.append(torch.cat((torch.Tensor(indices).unsqueeze(-1).to(dtype=float), torch.mm(torch.Tensor(offsets).to(dtype=float),cell) ), 1))
+    neighborlist = torch.nn.utils.rnn.pad_sequence(neighborlist, batch_first=True, padding_value=0) #what is a good value?   
+
+
+
+    '''
+    neighbor_pos = []
+    cell = torch.from_numpy(data.cell.array)
+
+    for i in range(num_atoms):
+        indices, offsets = nl.get_neighbors(i)
+        neighbors = torch.cat((torch.Tensor(indices).unsqueeze(-1), torch.Tensor(offsets)), 1)
+        neighbor_pos_i = [[] for i in range(num_atoms)] 
+
+        for image in neighbors:
+            j=int(image[0])
+            neighbor_pos_i[j].append(atom_positions[j]+(image[1:]*cell).sum(dim=0))
+
+        for j in [item for item in range(num_atoms) if item not in set(indices)]: #list of indices that are not in the neighbor of i
+            neighbor_pos_i[j].append(atom_positions[j])
+
+        neighbor_pos_i = [torch.stack(row) for row in neighbor_pos_i]
+        neighbor_pos_i= torch.nn.utils.rnn.pad_sequence(neighbor_pos_i, batch_first=True, padding_value=-100)
+
+        neighbor_pos.append(neighbor_pos_i)
+
+    neighbor_pos = torch.nn.utils.rnn.pad_sequence(neighbor_pos, batch_first=True, padding_value=-100)
+    '''
+
+
+
+
+    #for i in range(num_atoms):
+    #    neighbor_pos_i = []
+    #    indices, offsets = nl.get_neighbors(i)
+    #    neighbors = torch.cat((torch.Tensor(indices).unsqueeze(-1), torch.Tensor(offsets)), 1)
+    #    for j in range(num_atoms):
+    #        neighbor_pos_i_j=[]
+    #        for image in neighbors:
+    #            if image[0] == j:
+    #                neighbor_pos_i_j.append(atom_positions[j]+(image[1:]*cell).sum(dim=0))
+    #        if neighbor_pos_i_j==[]:
+    #            neighbor_pos_i.append(atom_positions[j].unsqueeze(0))
+    #        else:
+    #            neighbor_pos_i.append(torch.stack(neighbor_pos_i_j))
+    #
+    #    neighbor_pos_i = torch.nn.utils.rnn.pad_sequence(neighbor_pos_i, batch_first=True, padding_value=-100)
+    #    neighbor_pos.append(neighbor_pos_i)
+    #neighbor_pos = torch.nn.utils.rnn.pad_sequence(neighbor_pos, batch_first=True, padding_value=-100)
+
+
+    #neighborlist = torch.nn.utils.rnn.pad_sequence(neighborlist, batch_first=True, padding_value=-100) #what is a good value? 
+
+    #pdb.set_trace()
+    #molecule.update({'neighbor_pos': neighbor_pos})
+    molecule.update({'neighborlist': neighborlist})
+
     return molecule

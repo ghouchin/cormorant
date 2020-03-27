@@ -81,7 +81,7 @@ class ProcessedDataset(Dataset):
                 val = torch.Tensor(val)
                 if val.dim() == 1 and val.is_floating_point():
                     self.stats[key] = (val.mean(), val.std())
-            except ValueError:
+            except(ValueError, TypeError):
                 continue
         # self.stats = {key: (val.mean(), val.std()) for key, val in self.data.items() if type(val) is torch.Tensor and val.dim() == 1 and val.is_floating_point()}
 
