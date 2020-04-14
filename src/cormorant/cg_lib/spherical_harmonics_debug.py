@@ -134,6 +134,8 @@ class SphericalHarmonicsRelDebug(CGModule):
         sph_harms : :class:`list` of :class:`torch.Tensor`
             Output matrix of spherical harmonics from :math:`\ell=0` to :math:`\ell=maxl`
         """
+        
+        '''
         neighbor_pos = []
         num_atoms = pos.shape[1]
         import pdb
@@ -175,7 +177,7 @@ class SphericalHarmonicsRelDebug(CGModule):
         #for idx, prop in enumerate(neighbor_pos):
         #    s = prop.shape
         #    padded_neighbor_pos[idx, :s[-2], :s[-1]] = prop
-
+        '''
 
         return spherical_harmonics_rel_debug(self.cg_dict, pos, neighbor_pos, self.maxl,
                                        self.normalize, self.conj, self.sh_norm)

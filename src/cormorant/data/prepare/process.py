@@ -363,38 +363,38 @@ def _process_structure_neighborlist(data, cutoff):
     cell = torch.from_numpy(data.cell.array)
     molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions}
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
-    neighborlist = []
 
+    '''
+    neighborlist = []
     for i in range(num_atoms):
         indices, offsets = nl.get_neighbors(i)
         neighborlist.append(torch.cat((torch.Tensor(indices).unsqueeze(-1).to(dtype=float), torch.mm(torch.Tensor(offsets).to(dtype=float),cell) ), 1))
     neighborlist = torch.nn.utils.rnn.pad_sequence(neighborlist, batch_first=True, padding_value=0) #what is a good value?   
-
-
-
     '''
-    neighbor_pos = []
-    cell = torch.from_numpy(data.cell.array)
+
+
+    
+    neighbor_pos = [] #a list of the shifts of neighbors
+    neighborlist = torch.zeros([num_atoms, num_atoms], dtype=int) #a list of number of images of j for every i 
 
     for i in range(num_atoms):
         indices, offsets = nl.get_neighbors(i)
         neighbors = torch.cat((torch.Tensor(indices).unsqueeze(-1), torch.Tensor(offsets)), 1)
         neighbor_pos_i = [[] for i in range(num_atoms)] 
-
         for image in neighbors:
             j=int(image[0])
-            neighbor_pos_i[j].append(atom_positions[j]+(image[1:]*cell).sum(dim=0))
+            #neighbor_pos_i[j].append(atom_positions[j]+(image[1:]*cell).sum(dim=0))
+            neighbor_pos_i[j].append(torch.mm(image[1:],cell))
+            neighborlist[i,j] += 1
 
         for j in [item for item in range(num_atoms) if item not in set(indices)]: #list of indices that are not in the neighbor of i
-            neighbor_pos_i[j].append(atom_positions[j])
+            #neighbor_pos_i[j].append(atom_positions[j])
+            neighbor_pos_i[j].append(torch.zeros([3]))
 
         neighbor_pos_i = [torch.stack(row) for row in neighbor_pos_i]
-        neighbor_pos_i= torch.nn.utils.rnn.pad_sequence(neighbor_pos_i, batch_first=True, padding_value=-100)
-
+        neighbor_pos_i = torch.nn.utils.rnn.pad_sequence(neighbor_pos_i, batch_first=True, padding_value=0)
         neighbor_pos.append(neighbor_pos_i)
-
-    neighbor_pos = torch.nn.utils.rnn.pad_sequence(neighbor_pos, batch_first=True, padding_value=-100)
-    '''
+    neighbor_pos = torch.nn.utils.rnn.pad_sequence(neighbor_pos, batch_first=True, padding_value=0)
 
 
 
@@ -421,7 +421,7 @@ def _process_structure_neighborlist(data, cutoff):
     #neighborlist = torch.nn.utils.rnn.pad_sequence(neighborlist, batch_first=True, padding_value=-100) #what is a good value? 
 
     #pdb.set_trace()
-    #molecule.update({'neighbor_pos': neighbor_pos})
+    molecule.update({'neighbor_pos': neighbor_pos})
     molecule.update({'neighborlist': neighborlist})
 
     return molecule

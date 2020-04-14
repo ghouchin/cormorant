@@ -146,12 +146,12 @@ class CormorantASEDebug(CGModule):
             The output of the layer
         """
         # Get and prepare the data
-        atom_scalars, atom_mask, edge_scalars, edge_mask, atom_vectors, neighborlist = self.prepare_input(data)
+        atom_scalars, atom_mask, edge_scalars, edge_mask, atom_vectors, neighborlist, neighbor_pos = self.prepare_input(data)
         sq_norms = atom_vectors.pow(2).sum(dim=-1)
         norms = torch.sqrt(sq_norms)
 
         # Calculate spherical harmonics and radial functions
-        spherical_harmonics = self.sph_harms(atom_vectors, neighborlist)
+        spherical_harmonics = self.sph_harms(atom_vectors, neighborlist, neighbor_pos)
         rad_func_levels = self.rad_funcs(sq_norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network
@@ -206,7 +206,7 @@ class CormorantASEDebug(CGModule):
         atom_mask = data['atom_mask'].to(device)
         edge_mask = data['edge_mask'].to(device)
         neighborlist = data['neighborlist'].to(device, dtype)
-
+        neighbor_pos = data['neighbor_pos'].to(device, dtype)
 
         charge_tensor = (charges.unsqueeze(-1)/charge_scale).pow(torch.arange(charge_power+1., device=device, dtype=dtype))
         charge_tensor = charge_tensor.view(charges.shape + (1, charge_power+1))
@@ -215,7 +215,7 @@ class CormorantASEDebug(CGModule):
         edge_scalars = torch.tensor([])
         
 
-        return atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions, neighborlist
+        return atom_scalars, atom_mask, edge_scalars, edge_mask, atom_positions, neighborlist, neighbor_pos
 
 
 def expand_var_list(var, num_cg_levels):
