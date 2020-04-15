@@ -244,8 +244,8 @@ class Engine(object):
             loss, predict, targets = self.compute_single_batch(data)
             loss.backward()
             # ####### DEBUG
-            params = list(self.model.parameters()) 
-            params[-2].grad
+            #params = list(self.model.parameters()) 
+            #params[-2].grad
             # params = list(self.model.parameters())
             # print(torch.tensor([torch.max(p0.grad) for p0 in params]))
             # print(torch.tensor([torch.min(p0.grad) for p0 in params]))
@@ -296,7 +296,8 @@ class Engine(object):
         for data in dataloader:
             
             loss, predict, targets = self.compute_single_batch(data)
-
+            loss = loss.detach().cpu()
+            predict, targets = targets.detach().cpu(), predict.detach().cpu()
             all_targets.append(targets)
             all_predict.append(predict)
             all_loss.append(loss.unsqueeze(0))
