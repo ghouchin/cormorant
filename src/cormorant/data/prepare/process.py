@@ -308,7 +308,7 @@ def _process_structure(data):
     #     rel_positions.append(rel_pos)
 
     rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
-    rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])    
+    #rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])    
     rel_positions = torch.from_numpy(rel_positions)
     atom_positions = torch.from_numpy(data.positions)
     atom_charges = torch.from_numpy(data.numbers).float()

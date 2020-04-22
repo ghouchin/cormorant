@@ -30,9 +30,11 @@ class ASEInterface(Calculator):
 
     @classmethod
     # def load(cls, filename, num_species, included_species=None):
-    def load(cls, filename):
+    def load(cls, filename,cuda=None):
         saved_run = torch.load(filename)
         args = saved_run['args']
+        if cuda is not None:
+            args.cuda = cuda
         max_charge = saved_run['max_charge']#max(included_species)
         num_species = saved_run['num_species']
         # Initialize device and data type
