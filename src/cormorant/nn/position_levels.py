@@ -172,10 +172,10 @@ class RadPolyTrig(nn.Module):
         # If desired, mix the radial components to a desired shape
         self.mix = mix
         if (mix == 'cplx') or (mix is True):
-            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, 2*self.num_channels).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
+            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, 2*self.num_channels, bias=True).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
             self.tau = SO3Tau((num_channels,) * (max_sh + 1))
         elif mix == 'real':
-            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, self.num_channels).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
+            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, self.num_channels, bias=True).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
             self.tau = SO3Tau((num_channels,) * (max_sh + 1))
         elif (mix == 'none') or (mix is False):
             self.linear = None

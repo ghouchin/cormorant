@@ -88,7 +88,7 @@ class CormorantMD17(CGModule):
         num_scalars_in = self.num_species * (self.charge_power + 1)
         num_scalars_out = num_channels[0]
 
-        self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out,
+        self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out, bias=True,
                                            device=self.device, dtype=self.dtype)
         self.input_func_edge = NoLayer()
 
@@ -115,7 +115,7 @@ class CormorantMD17(CGModule):
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
-        self.output_layer_atom = OutputLinear(num_scalars_atom, bias=True,
+        self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
                                               device=self.device, dtype=self.dtype)
         self.output_layer_edge = NoLayer()
 

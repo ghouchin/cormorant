@@ -39,11 +39,17 @@ class ASEInterface(Calculator):
         num_species = saved_run['num_species']
         # Initialize device and data type
         device, dtype = init_cuda(args.cuda, args.dtype)
-        model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+        #model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+        #                              args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
+        #                              args.weight_init, args.level_gain, args.charge_power, args.basis_set,
+        #                              max_charge, args.gaussian_mask,
+        #                              args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
+        #                              device=device, dtype=dtype)
+        model = CormorantMD17(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
                                       args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                                       args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                                       max_charge, args.gaussian_mask,
-                                      args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
+                                      args.top, args.input, args.num_mpnn_levels,
                                       device=device, dtype=dtype)
         #model = CormorantASE(*args, num_species=num_species, charge_scale=charge_scale,
         #                     device=device, dtype=dtype)
@@ -160,12 +166,12 @@ class ASEInterface(Calculator):
         corm_input = self.convert_atoms(atoms)
         # Grad must be called for each predicted energy in the corm_input
         if not corm_input['relative_pos'].requires_grad and 'forces' in properties:
-            print('calling force!')
+            #print('calling force!')
             corm_input['relative_pos'].requires_grad_()
 
         mu, sigma = self.stats['energy']
         energy = self.model(corm_input)
-        self.results['energy'] = ( energy.detach().cpu() * sigma + mu).numpy()[0]
+        self.results['energy'] = ( energy.detach().cpu() * sigma).numpy()[0]
         
 
         if 'forces' in properties:
