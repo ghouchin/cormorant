@@ -95,6 +95,8 @@ def collate_fn(batch, edge_features=None):
     to_keep = (batch['charges'].sum(0) > 0)
 
     batch = {key: drop_zeros(prop, to_keep) for key, prop in batch.items()}
+    if 'relative_pos' in batch.keys():
+        batch['relative_pos'] = batch['relative_pos'][:, :, to_keep, ...]
 
     atom_mask = batch['charges'] > 0
     edge_mask = atom_mask.unsqueeze(1) * atom_mask.unsqueeze(2)

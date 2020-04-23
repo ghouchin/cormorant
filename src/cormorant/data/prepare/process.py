@@ -6,7 +6,8 @@ import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 from ase.neighborlist import mic
 from ase.neighborlist import NeighborList, NewPrimitiveNeighborList
-import pdb
+from cormorant.data.collate import batch_stack
+
 
 charge_dict = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9,
                'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17,
@@ -248,6 +249,9 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
     # Convert list-of-dicts to dict-of-lists
     molecules = {prop: [mol[prop] for mol in molecules] for prop in props}
 
+    #need to pad and stack if saving 
+    molecules = {key: batch_stack(val, edge_mat=not bool(3-len(val[0].shape)) ) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
+    #molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
     # If stacking is desireable, pad and then stack.
     # if stack:
     #     molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
@@ -277,10 +281,10 @@ def process_db_row(data, forcetrain=False):
     # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
     if forcetrain:
         prop_strings = ['energy', 'forces']
-        mol_props = [data.get_potential_energy(), data.get_forces()]
+        mol_props = [torch.Tensor([data.get_potential_energy()]), torch.from_numpy(data.get_forces())]
     else:
         prop_strings = ['energy']
-        mol_props = [data.get_potential_energy()]
+        mol_props = [torch.Tensor([data.get_potential_energy()])]
 
     mol_props = dict(zip(prop_strings, mol_props))
     molecule.update(mol_props)
@@ -304,13 +308,12 @@ def _process_structure(data):
     #         rij = np.array(ri)-np.array(rj)
     #         rel_pos.append(list(mic(rij, data.cell)))
     #     rel_positions.append(rel_pos)
-    #import pdb
-    #pdb.set_trace()
     rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
-    #rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])
+    #rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])    
     rel_positions = torch.from_numpy(rel_positions)
     atom_positions = torch.from_numpy(data.positions)
     atom_charges = torch.from_numpy(data.numbers).float()
+    
 
     molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': rel_positions}
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
@@ -352,7 +355,6 @@ def process_db_row_debug(data, forcetrain=False, cutoff=None):
 
 def _process_structure_neighborlist(data, cutoff):
     num_atoms = data.get_global_number_of_atoms()
-    #pdb.set_trace()
     #rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
     #rel_positions = np.array([mic(atoms_pos, data.cell) for atoms_pos in rel_positions])
     #rel_positions = torch.from_numpy(rel_positions)
@@ -420,7 +422,6 @@ def _process_structure_neighborlist(data, cutoff):
 
     #neighborlist = torch.nn.utils.rnn.pad_sequence(neighborlist, batch_first=True, padding_value=-100) #what is a good value? 
 
-    #pdb.set_trace()
     molecule.update({'neighbor_pos': neighbor_pos})
     molecule.update({'neighborlist': neighborlist})
 

@@ -102,7 +102,7 @@ class OutputLinear(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, num_scalars, bias=True, device=None, dtype=torch.float):
+    def __init__(self, num_scalars, bias=False, device=None, dtype=torch.float):
         if device is None:
             device = torch.device('cpu')
         super(OutputLinear, self).__init__()

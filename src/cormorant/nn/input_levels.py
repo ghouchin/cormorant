@@ -34,7 +34,7 @@ class InputLinear(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, channels_in, channels_out, bias=True,
+    def __init__(self, channels_in, channels_out, bias=False,
                  device=None, dtype=torch.float):
         if device is None:
             device = torch.device('cpu')
@@ -149,7 +149,7 @@ class InputMPNN(nn.Module):
             rad_filt = RadPolyTrig(0, basis_set, chan_in, mix='real', device=device, dtype=dtype)
     
             mask = MaskLevel(1, hard_cut_rad, soft_cut_rad, soft_cut_width, ['soft', 'hard'], device=device, dtype=dtype)
-            mlp = BasicMLP(2*chan_in, chan_out, num_hidden=num_hidden, layer_width=layer_width, device=device, dtype=dtype)
+            mlp = BasicMLP(2*chan_in, chan_out, num_hidden=num_hidden, layer_width=layer_width, bias=False, device=device, dtype=dtype)
 
             self.mlps.append(mlp)
             self.masks.append(mask)

@@ -8,8 +8,8 @@ from cormorant.cg_lib import CGModule, SphericalHarmonics
 from cormorant.models.cormorant_cg import CormorantCG
 
 from cormorant.nn import RadialFilters
-from cormorant.nn import InputMPNN
-from cormorant.nn import OutputPMLP, GetScalarsAtom
+from cormorant.nn import InputMPNN, InputLinear
+from cormorant.nn import OutputPMLP, OutputLinear, GetScalarsAtom
 from cormorant.nn import NoLayer
 
 
@@ -92,9 +92,11 @@ class CormorantASE(CGModule):
         num_scalars_in = self.num_species * (self.charge_power + 1)
         num_scalars_out = num_channels[0]
 
-        self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers,
-                                         soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0],
-                                         activation=activation, device=self.device, dtype=self.dtype)
+        #self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers,
+        #                                 soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0],
+        #                                 activation=activation, device=self.device, dtype=self.dtype)
+        self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out, bias=True,
+                                           device=self.device, dtype=self.dtype)
         self.input_func_edge = NoLayer()
 
         tau_in_atom = self.input_func_atom.tau
@@ -119,8 +121,10 @@ class CormorantASE(CGModule):
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
-        self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
-                                            device=self.device, dtype=self.dtype)
+        #self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
+        #                                    device=self.device, dtype=self.dtype)
+        self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
+                                              device=self.device, dtype=self.dtype) 
         self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
@@ -196,9 +200,11 @@ class CormorantASE(CGModule):
         charge_power, charge_scale, device, dtype = self.charge_power, self.charge_scale, self.device, self.dtype
 
         # atom_positions = data['positions'].to(device, dtype)
-        atom_rel_positions = data['relative_pos'].to(device, dtype)  # relative position vectors
         one_hot = data['one_hot'].to(device, dtype)
         charges = data['charges'].to(device, dtype)
+
+        size = charges.shape[1]
+        atom_rel_positions = data['relative_pos'].to(device, dtype)[:,:size,:size,...]  # relative position vectors 
 
         atom_mask = data['atom_mask'].to(device)
         edge_mask = data['edge_mask'].to(device)

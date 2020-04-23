@@ -145,7 +145,8 @@ def spherical_harmonics(cg_dict, pos, maxsh, normalize=True, conj=False, sh_norm
     """
     s = pos.shape[:-1]
 
-    pos = pos.view(-1, 3)
+    #pos = pos.view(-1, 3)
+    pos = pos.reshape(-1,3)
 
     if normalize:
         norm = pos.norm(dim=-1, keepdim=True)
