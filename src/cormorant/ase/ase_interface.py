@@ -39,18 +39,18 @@ class ASEInterface(Calculator):
         num_species = saved_run['num_species']
         # Initialize device and data type
         device, dtype = init_cuda(args.cuda, args.dtype)
-        #model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
-        #                              args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
-        #                              args.weight_init, args.level_gain, args.charge_power, args.basis_set,
-        #                              max_charge, args.gaussian_mask,
-        #                              args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
-        #                              device=device, dtype=dtype)
-        model = CormorantMD17(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+        model = CormorantASE(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
                                       args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
                                       args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                                       max_charge, args.gaussian_mask,
-                                      args.top, args.input, args.num_mpnn_levels,
+                                      args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
                                       device=device, dtype=dtype)
+        #model = CormorantMD17(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
+        #                              args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
+        #                              args.weight_init, args.level_gain, args.charge_power, args.basis_set,
+        #                              max_charge, args.gaussian_mask,
+        #                              args.top, args.input, args.num_mpnn_levels,
+        #                              device=device, dtype=dtype)
         #model = CormorantASE(*args, num_species=num_species, charge_scale=charge_scale,
         #                     device=device, dtype=dtype)
         model.load_state_dict(saved_run['model_state'])
@@ -171,7 +171,7 @@ class ASEInterface(Calculator):
 
         mu, sigma = self.stats['energy']
         energy = self.model(corm_input)
-        self.results['energy'] = ( energy.detach().cpu() * sigma).numpy()[0]
+        self.results['energy'] = ( energy.detach().cpu() * sigma + len(atoms)*mu).numpy()[0]
         
 
         if 'forces' in properties:
@@ -304,6 +304,13 @@ class ASEInterface(Calculator):
         data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
         return data
 
+    def convert_npz(self, data):
+        data = {key: torch.tensor(val) for key, val in data.items()}
+        #data = {key: val.unsqueeze(0) for key, val in data.items()}
+        data['atom_mask'] = torch.ones(data['charges'].shape).bool()
+        data['edge_mask'] = data['atom_mask'] * data['atom_mask'].unsqueeze(-1)
+        data['one_hot'] = data['charges'].unsqueeze(-1) == self.included_species.unsqueeze(0).unsqueeze(0)
+        return data
 
 
 

@@ -77,12 +77,17 @@ class ProcessedDataset(Dataset):
     def calc_stats(self):
         self.stats = {}
         for key, val in self.data.items():
-            try:
-                val = torch.Tensor(val)
-                if val.dim() == 1 and val.is_floating_point():
-                    self.stats[key] = (val.mean(), val.std())
-            except (ValueError, TypeError):
-                continue
+            if key=='energy':
+                val_per_atom = torch.Tensor(val)/self.data['num_atoms'] #we will find the average energy per atom
+                val = torch.Tensor(val) #we will still find the overall standard deviation
+                self.stats[key] = (val_per_atom.mean(), val.std())
+            else:
+                try:
+                    val = torch.Tensor(val)
+                    if val.dim() == 1 and val.is_floating_point():
+                        self.stats[key] = (val.mean(), val.std())
+                except (ValueError, TypeError):
+                    continue
         # self.stats = {key: (val.mean(), val.std()) for key, val in self.data.items() if type(val) is torch.Tensor and val.dim() == 1 and val.is_floating_point()}
 
     def convert_units(self, units_dict):

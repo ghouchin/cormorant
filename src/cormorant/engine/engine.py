@@ -161,7 +161,7 @@ class Engine(object):
         if batch_idx == 0:
             self.mae, self.rmse = mini_batch_mae, mini_batch_rmse
         else:
-            alpha = self.alpha
+            alpha = self.alpha 
             self.mae = alpha * self.mae + (1 - alpha) * mini_batch_mae
             self.rmse = alpha * self.rmse + (1 - alpha) * mini_batch_rmse
 
@@ -217,8 +217,8 @@ class Engine(object):
         
 
         if stats is not None:
-            mu, sigma = stats[self.target]
-            targets = (targets - mu) / sigma
+            mu, sigma = stats[self.target] #mu is the average energy per atom and std is the standard deviation of the total energies.
+            targets = (targets - mu*data['num_atoms'].to(self.device)) / sigma
 
         return targets
 
@@ -268,18 +268,18 @@ class Engine(object):
         self.optimizer.zero_grad()
         targets = self._get_target(data, self.stats)
         predict = self.model(data)
-
-        loss = self.loss_fn(predict/data['num_atoms'].to(self.device), targets/data['num_atoms'].to(self.device))
+        data['num_atoms'] = data['num_atoms'].to(self.device)
+        loss = self.loss_fn(predict/data['num_atoms'], targets/data['num_atoms'])
         mse = loss
-        mae = torch.nn.functional.l1_loss(predict/data['num_atoms'].to(self.device), targets/data['num_atoms'].to(self.device))
+        mae = torch.nn.functional.l1_loss(predict/data['num_atoms'], targets/data['num_atoms'])
 
-        mu, sigma = self.stats[self.target]
-        predict = sigma*predict + mu
-        targets = sigma*targets + mu
-        predict = predict/data['num_atoms'].to(self.device)
-        targets = targets/data['num_atoms'].to(self.device)
+        mu, sigma = self.stats[self.target] #mu is the average energy per atom and std is the standard deviation of the total energies. 
+        predict = sigma*predict + mu*data['num_atoms']
+        targets = sigma*targets + mu*data['num_atoms']
+        predict = predict/data['num_atoms']
+        targets = targets/data['num_atoms']
 
-
+        data['num_atoms'] = data['num_atoms'].detach().cpu()
         return loss, mse, mae, predict, targets
 
     def predict(self, set='valid'):
@@ -309,6 +309,7 @@ class Engine(object):
         N = len(dataloader.dataset.data['energy'])
         all_rmse = sqrt(all_mse/N)
         all_mae /= N 
+        all_loss /= N
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
@@ -387,17 +388,18 @@ class ForceEngine(Engine):
             force_pred[~data['atom_mask']] = 0.
 
         #force_pred = (force_pred.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s)
-
+        data['num_atoms'] = data['num_atoms'].to(self.device)
         # Calculate loss and backprop
-        loss, mse = self.loss_fn(energy_pred/data['num_atoms'].to(self.device), force_pred, energy_scaled/data['num_atoms'].to(self.device), force_scaled)
-        mae = torch.nn.functional.l1_loss(energy_pred/data['num_atoms'].to(self.device), energy_scaled/data['num_atoms'].to(self.device))
+        loss, mse = self.loss_fn(energy_pred/data['num_atoms'], force_pred, energy_scaled/data['num_atoms'], force_scaled)
+        mae = torch.nn.functional.l1_loss(energy_pred/data['num_atoms'], energy_scaled/data['num_atoms'])
 
         mu, sigma = self.stats[self.target]
-        energy_pred = sigma*energy_pred + mu
-        energy_scaled = sigma*energy_scaled + mu
-        energy_pred = energy_pred/data['num_atoms'].to(self.device)    
-        energy_scaled = energy_scaled/data['num_atoms'].to(self.device)
+        energy_pred = sigma*energy_pred + mu*data['num_atoms']
+        energy_scaled = sigma*energy_scaled + mu*data['num_atoms']
+        energy_pred = energy_pred/data['num_atoms']
+        energy_scaled = energy_scaled/data['num_atoms']
         
+        data['num_atoms'] = data['num_atoms'].detach().cpu()
         return loss, mse, mae, energy_pred, energy_scaled  
         
 
