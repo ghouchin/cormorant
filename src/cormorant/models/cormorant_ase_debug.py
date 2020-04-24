@@ -79,6 +79,8 @@ class CormorantASEDebug(CGModule):
         self.charge_scale = charge_scale
         self.num_species = num_species
 
+        ######## AS OF 4/23 I HAVE PROCESSED THE DATA TO GET TO THIS POINT #############
+        ######## NOW THE SPH HARM NEED TO BE MODIFIED ##################################
         # Set up spherical harmonics
         self.sph_harms = SphericalHarmonicsRelDebug(max(max_sh), conj=True,
                                                 device=device, dtype=dtype, cg_dict=cg_dict)
@@ -151,7 +153,7 @@ class CormorantASEDebug(CGModule):
         norms = torch.sqrt(sq_norms)
 
         # Calculate spherical harmonics and radial functions
-        spherical_harmonics = self.sph_harms(atom_vectors, neighborlist, neighbor_pos)
+        spherical_harmonics = self.sph_harms(atom_vectors, neighbor_pos, neighborlist)
         rad_func_levels = self.rad_funcs(sq_norms, edge_mask * (norms > 0))
 
         # Prepare the input reps for both the atom and edge network

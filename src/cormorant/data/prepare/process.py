@@ -250,7 +250,18 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
     molecules = {prop: [mol[prop] for mol in molecules] for prop in props}
 
     #need to pad and stack if saving 
-    molecules = {key: batch_stack(val, edge_mat=not bool(3-len(val[0].shape)) ) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
+    if force_train:
+        prop_strings = ['energy', 'forces','positions','charges','num_atoms']
+    else:
+        prop_strings = ['energy','positions','charges','num_atoms']
+    for key in prop_strings:
+        molecules[key] = batch_stack(molecules[key], edge_mat=not bool(3-molecules[key][0].dim()) ) if molecules[key][0].dim() > 0 else torch.stack(molecules[key])
+
+    if 'neighborlist' in molecules.keys():
+        molecules['neighborlist']= batch_stack(molecules['neighborlist'], edge_mat=True )
+        molecules['neighbor_pos']= batch_stack(molecules['neighbor_pos'], edge_mat=True  )
+    #molecules = {key: batch_stack(val, edge_mat=not bool(3-len(val[0].shape)) ) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
+    
     #molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
     # If stacking is desireable, pad and then stack.
     # if stack:
@@ -259,7 +270,7 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
     return molecules
 
 
-def process_db_row(data, forcetrain=False):
+def process_db_row(data, force_train=False):
     """
     Read an ase-db row and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type.
 
@@ -279,7 +290,7 @@ def process_db_row(data, forcetrain=False):
     molecule = _process_structure(data)
 
     # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
-    if forcetrain:
+    if force_train:
         prop_strings = ['energy', 'forces']
         mol_props = [torch.Tensor([data.get_potential_energy()]), torch.from_numpy(data.get_forces())]
     else:
@@ -319,7 +330,7 @@ def _process_structure(data):
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}
     return molecule
 
-def process_db_row_debug(data, forcetrain=False, cutoff=None):
+def process_db_row_debug(data, force_train=False, cutoff=None):
     """
     Read an ase-db row and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type.
 
@@ -340,13 +351,12 @@ def process_db_row_debug(data, forcetrain=False, cutoff=None):
     molecule = _process_structure_neighborlist(data, cutoff)
 
     # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
-    if forcetrain:
+    if force_train:
         prop_strings = ['energy', 'forces']
-        mol_props = [data.get_potential_energy(), data.get_forces()]
+        mol_props = [torch.Tensor([data.get_potential_energy()]), torch.from_numpy(data.get_forces())]
     else:
         prop_strings = ['energy']
-        mol_props = [data.get_potential_energy()]
-
+        mol_props = [torch.Tensor([data.get_potential_energy()])]
     mol_props = dict(zip(prop_strings, mol_props))
     molecule.update(mol_props)
     return molecule
@@ -386,12 +396,12 @@ def _process_structure_neighborlist(data, cutoff):
         for image in neighbors:
             j=int(image[0])
             #neighbor_pos_i[j].append(atom_positions[j]+(image[1:]*cell).sum(dim=0))
-            neighbor_pos_i[j].append(torch.mm(image[1:],cell))
+            neighbor_pos_i[j].append(torch.mm(image[1:].to(dtype=float).unsqueeze(0),cell))
             neighborlist[i,j] += 1
 
         for j in [item for item in range(num_atoms) if item not in set(indices)]: #list of indices that are not in the neighbor of i
             #neighbor_pos_i[j].append(atom_positions[j])
-            neighbor_pos_i[j].append(torch.zeros([3]))
+            neighbor_pos_i[j].append(torch.zeros([3]).unsqueeze(0))
 
         neighbor_pos_i = [torch.stack(row) for row in neighbor_pos_i]
         neighbor_pos_i = torch.nn.utils.rnn.pad_sequence(neighbor_pos_i, batch_first=True, padding_value=0)
@@ -422,7 +432,7 @@ def _process_structure_neighborlist(data, cutoff):
 
     #neighborlist = torch.nn.utils.rnn.pad_sequence(neighborlist, batch_first=True, padding_value=-100) #what is a good value? 
 
-    molecule.update({'neighbor_pos': neighbor_pos})
+    molecule.update({'neighbor_pos': neighbor_pos.squeeze(-2)})
     molecule.update({'neighborlist': neighborlist})
 
     return molecule

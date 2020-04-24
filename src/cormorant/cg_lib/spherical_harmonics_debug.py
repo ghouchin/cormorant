@@ -114,7 +114,7 @@ class SphericalHarmonicsRelDebug(CGModule):
 
         super().__init__(cg_dict=cg_dict, maxl=maxl, device=device, dtype=dtype)
 
-    def forward(self, pos, neighborlist):
+    def forward(self, pos, neighbor_pos, neighborlist):
         r"""
         Calculate the Spherical Harmonics for a matrix of differences of cartesian
         position vectors `pos` and `neighborlist`.
@@ -124,11 +124,12 @@ class SphericalHarmonicsRelDebug(CGModule):
 
         Parameters
         ----------
-        pos1 : :class:`torch.Tensor`
-            First tensor of cartesian vectors :math:`{\bf r}^{(1)}_i`.
-        pos2 : :class:`torch.Tensor`
-            Second tensor of cartesian vectors :math:`{\bf r}^{(2)}_j`.
-
+        pos : :class:`torch.Tensor`
+            Tensor of cartesian vectors that are the position of the atoms :math:`{\bf r}_i`.
+        neighbor_pos : :class:`torch.Tensor`
+            Tensor of the position offsets from the normal position of j of each image of j neighboring i :math:`{\bf r}^{(2)}_j`.
+        neighborlist : class:`torch.Tensor`
+            Tensor of the number of images of j neigboring i for ease in calculating.
         Returns
         -------
         sph_harms : :class:`list` of :class:`torch.Tensor`
@@ -178,10 +179,20 @@ class SphericalHarmonicsRelDebug(CGModule):
         #    s = prop.shape
         #    padded_neighbor_pos[idx, :s[-2], :s[-1]] = prop
         '''
+        
 
-        return spherical_harmonics_rel_debug(self.cg_dict, pos, neighbor_pos, self.maxl,
+        return spherical_harmonics_rel_debug(self.cg_dict, pos, neighbor_pos, neighborlist, self.maxl,
                                        self.normalize, self.conj, self.sh_norm)
 
+def spherical_harmonics_add(cg_dict, rel_pos, maxsh, normalize=True, conj=False, sh_norm='unit'):
+    #need to write a new kernel for this#
+    sp=[]
+    for image in range(rel_pos.shape[-2]):
+        sp.append(spherical_harmonics(cg_dict, rel_pos[:,:,:,image,:] , maxsh, normalize, conj, sh_norm))
+    import pdb
+    pdb.set_trace()
+    sp=torch.stack(sp)
+    return sp.sum(dim=-1)
 
 def spherical_harmonics(cg_dict, pos, maxsh, normalize=True, conj=False, sh_norm='unit'):
     r"""
@@ -230,12 +241,15 @@ def spherical_harmonics(cg_dict, pos, maxsh, normalize=True, conj=False, sh_norm
     return SO3Vec(sph_harms)
 
 
-def spherical_harmonics_rel_debug(cg_dict, pos1, pos2, maxsh, normalize=True, conj=False, sh_norm='unit'):
+def spherical_harmonics_rel_debug(cg_dict, pos1, pos2, neighborlist, maxsh, normalize=True, conj=False, sh_norm='unit'):
     r"""
     Functional form of the relative Spherical Harmonics. See documentation of
     :class:`SphericalHarmonicsRel` for details.
     """
-    rel_pos = pos1.unsqueeze(-2).repeat(1,1,pos2.shape[-2],1).unsqueeze(-3) - pos2
+    import pdb
+    pdb.set_trace()
+    pos3 = pos1.unsqueeze(-2).repeat(1,1,pos2.shape[-2],1).unsqueeze(-4) + pos2 #this adds j to every shift in the pos2 vector, now pos2 is the true position of each j image
+    rel_pos = pos1.unsqueeze(-2).repeat(1,1,pos2.shape[-2],1).unsqueeze(-3) - pos3
     #rel_pos = pos1.unsqueeze(-2) - pos2.unsqueeze(-3)
     rel_norms = rel_pos.norm(dim=-1, keepdim=True)
     rel_sq_norms = rel_pos.pow(2).sum(dim=-1, keepdim=True)

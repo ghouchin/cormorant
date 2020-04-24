@@ -7,7 +7,9 @@ from ase.io import read
 #@profile
 def main():
     calc = ASEInterfaceDebug()
-    calc.train('same_size.db',force_factor=0, num_epoch=10, batch_size=2, num_channels=3)
+    import pdb
+    pdb.set_trace()
+    calc.train('small.db',force_factor=0, num_epoch=10, batch_size=30, num_channels=3)
 
 
 
