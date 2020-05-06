@@ -89,7 +89,7 @@ class ASEInterface(Calculator):
         force_train = (force_factor != 0.)
         num_train = args.num_train
         #num_train = 10
-        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, force_download = args.force_download, force_train=force_train)
+        num_train, num_valid, num_test, datasets, num_species, max_charge = self.initialize_database(num_train, args.num_valid, args.num_test, args.datadir, database, cutoff=args.hard_cut_rad, force_download = args.force_download, force_train=force_train)
 
         # Construct PyTorch dataloaders from datasets
         dataloaders = {split: DataLoader(dataset,
@@ -178,7 +178,7 @@ class ASEInterface(Calculator):
             forces = self._get_forces(energy, corm_input)*sigma
             self.results['forces'] = forces.detach().cpu().numpy()[0][0]
 
-    def initialize_database(self, num_train, num_valid, num_test, datadir, database, splits=None, force_download = False, force_train=True):
+    def initialize_database(self, num_train, num_valid, num_test, datadir, database, cutoff, splits=None, force_download = False, force_train=True):
         """
         Initialized the ASE database into a format that the Pytorch routines can use
 
@@ -208,7 +208,7 @@ class ASEInterface(Calculator):
         num_pts = {'train': num_train, 'test': num_test, 'valid': num_valid}
 
         datafiles = self.prepare_dataset(
-            datadir, database, splits, force_download = force_download, force_train=force_train)
+            datadir, database, splits, cutoff, force_download = force_download, force_train=force_train)
 
         # Process ASE database, and return dictionary of splits
         ase_data = {}
@@ -226,7 +226,7 @@ class ASEInterface(Calculator):
 
         return num_train, num_valid, num_test, datasets, num_species, max_charge
 
-    def prepare_dataset(self, datadir, database, splits, force_download = False, force_train=False):
+    def prepare_dataset(self, datadir, database, splits, cutoff, force_download = False, force_train=False):
         name = os.path.basename(database).split('.')[0]
         dataset_dir = [datadir, name]
         # Names of splits, based upon keys if split dictionary exists, elsewise default to train/valid/test.
@@ -267,9 +267,10 @@ class ASEInterface(Calculator):
 
             # Process ASE database, and return dictionary of splits
             ase_data = {}
+            process_row = partial(process_db_row, cutoff=cutoff)
             for split, split_idx in splits.items():
                 ase_data[split] = process_ase(
-                    database, process_db_row, file_idx_list=split_idx, force_train=force_train)
+                    database, process_row, file_idx_list=split_idx, force_train=force_train)
 
 
             # Save processed ASE data into train/validation/test splits
