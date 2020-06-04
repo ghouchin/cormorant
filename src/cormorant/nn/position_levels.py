@@ -69,10 +69,11 @@ class PNetRadialFilter(torch.nn.Module):
         real_edges = torch.where(base_mask.unsqueeze(-1), edges, self.zero)
         complex_edges = torch.zeros(edges.shape, dtype=self.dtype, device=self.device)
         edges = torch.stack((real_edges, complex_edges), dim=-1)
-        #rad_funcs = [SO3Scalar([edges] * (self.max_sh[i] + 1)) for i in range(self.num_levels)]
-        rad_funcs = [edges * (self.max_sh[i] + 1) for i in range(self.num_levels)]
+        rad_funcs = [SO3Scalar([edges] * (self.max_sh[i] + 1)) for i in range(self.num_levels)]
+        return rad_funcs
+        #rad_funcs = [edges * (self.max_sh[i] + 1) for i in range(self.num_levels)]
         # print([ri.shapes for ri in rad_funcs])
-        return SO3Scalar(rad_funcs)
+        #return SO3Scalar(rad_funcs)
 
 
 

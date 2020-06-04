@@ -133,7 +133,7 @@ class ASEInterface(Calculator):
             trainer = Engine(args, dataloaders, self.model, loss_fn, optimizer, scheduler, args.target, restart_epochs,
                              bestfile=bestfile, checkfile=checkfile, num_epoch=num_epoch,
                              num_train=num_train, batch_size=batch_size, device=device, dtype=dtype,
-                             save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch,
+                             save=args.save, load=args.load, alpha=args.alpha, lr_minibatch=args.lr_minibatch, predictfile=args.predictfile,
                              textlog=args.textlog)
 
         # Load from checkpoint file. If no checkpoint file exists, automatically does nothing.

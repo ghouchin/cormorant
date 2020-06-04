@@ -7,7 +7,7 @@ from cormorant.cg_lib import CGModule, SphericalHarmonics
 
 from cormorant.models.cormorant_cg import CormorantCG
 
-from cormorant.nn import RadialFilters
+from cormorant.nn import RadialFilters,  DistanceBasis, PNetRadialFilter
 from cormorant.nn import InputMPNN, InputLinear
 from cormorant.nn import OutputPMLP, OutputLinear, GetScalarsAtom
 from cormorant.nn import NoLayer
@@ -87,6 +87,10 @@ class CormorantASE(CGModule):
         # Set up position functions, now independent of spherical harmonics
         self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
                                        device=self.device, dtype=self.dtype)
+
+        #dist_object = DistanceBasis(32, device=self.device, dtype=self.dtype)
+        #self.rad_funcs = PNetRadialFilter(max_sh, dist_object, num_cg_levels, device=self.device, dtype=self.dtype)
+
         tau_pos = self.rad_funcs.tau
 
         num_scalars_in = self.num_species * (self.charge_power + 1)
