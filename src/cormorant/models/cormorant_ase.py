@@ -125,10 +125,10 @@ class CormorantASE(CGModule):
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
-        #self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
-        #                                    device=self.device, dtype=self.dtype)
-        self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
-                                              device=self.device, dtype=self.dtype) 
+        self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
+                                            device=self.device, dtype=self.dtype)
+        #self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
+        #                                      device=self.device, dtype=self.dtype) 
         self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
