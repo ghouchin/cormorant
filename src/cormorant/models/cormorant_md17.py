@@ -43,7 +43,9 @@ class CormorantMD17(CGModule):
                  weight_init, level_gain, charge_power, basis_set,
                  charge_scale, gaussian_mask,
                  top, input, num_mpnn_layers, activation='leakyrelu',
-                 device=None, dtype=None, cg_dict=None):
+                 device=None, dtype=None, cg_dict=None,
+                 use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
+                 use_ag=True, use_sq=True, use_id=True, rad_func_type='old'):
 
         logging.info('Initializing network!')
         level_gain = expand_var_list(level_gain, num_cg_levels)
@@ -86,7 +88,7 @@ class CormorantMD17(CGModule):
         num_scalars_in = self.num_species * (self.charge_power + 1)
         num_scalars_out = num_channels[0]
 
-        self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out,
+        self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out, bias=True,
                                            device=self.device, dtype=self.dtype)
         self.input_func_edge = NoLayer()
 
@@ -98,7 +100,10 @@ class CormorantMD17(CGModule):
                                         level_gain, weight_init, cutoff_type,
                                         hard_cut_rad, soft_cut_rad, soft_cut_width,
                                         cat=True, gaussian_mask=gaussian_mask,
-                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
+                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict,
+                                        use_edge_in=use_edge_in, use_edge_dot=use_edge_dot, use_pos_funcs=use_pos_funcs,
+                                        use_ag=use_ag, use_sq=use_sq, use_id=use_id)
+ 
 
         tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
         tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
@@ -110,7 +115,7 @@ class CormorantMD17(CGModule):
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
 
-        self.output_layer_atom = OutputLinear(num_scalars_atom, bias=True,
+        self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
                                               device=self.device, dtype=self.dtype)
         self.output_layer_edge = NoLayer()
 

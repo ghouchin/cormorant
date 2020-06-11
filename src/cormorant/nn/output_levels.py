@@ -102,7 +102,7 @@ class OutputLinear(nn.Module):
     dtype : :class:`torch.dtype`, optional
         Data type to instantite the module to.
     """
-    def __init__(self, num_scalars, bias=True, device=None, dtype=torch.float):
+    def __init__(self, num_scalars, bias=False, device=None, dtype=torch.float):
         if device is None:
             device = torch.device('cpu')
         super(OutputLinear, self).__init__()
@@ -140,16 +140,16 @@ class OutputLinear(nn.Module):
         return predict
 
 
+
 class OutputPMLP(nn.Module):
     """
     Module to create prediction based upon a set of rotationally invariant
     atom feature vectors.
 
-    This is peformed in a three-step process::
+    This is now peformed in a two-step process::
 
     (1) A MLP is applied to each set of scalar atom-features.
-    (2) The environments are summed up.
-    (3) Another MLP is applied to the output to predict a single learning target.
+    (2) The environments and atoms are summed up to predict a single learning target.
 
     Parameters
     ----------
@@ -157,7 +157,7 @@ class OutputPMLP(nn.Module):
         Number scalars that will be used in the prediction at the output
         of the network.
     bias : :class:`bool`, optional
-        Include a bias term in the linear mixing level.
+        Include a bias term in the linear mixing level. [THIS SHOULD PROBABLY BE REMOVED]
     device : :class:`torch.device`, optional
         Device to instantite the module to.
     dtype : :class:`torch.dtype`, optional
@@ -171,8 +171,8 @@ class OutputPMLP(nn.Module):
         self.num_scalars = num_scalars
         self.num_mixed = num_mixed
 
-        self.mlp1 = BasicMLP(2*num_scalars, num_mixed, num_hidden=1, activation=activation, device=device, dtype=dtype)
-        self.mlp2 = BasicMLP(num_mixed, 1, num_hidden=1, activation=activation, device=device, dtype=dtype)
+        self.mlp = BasicMLP(2*num_scalars, num_mixed, num_hidden=1, activation=activation, device=device, dtype=dtype)
+        #self.mlp2 = BasicMLP(num_mixed, 1, num_hidden=1, activation=activation, device=device, dtype=dtype)
 
         self.zero = torch.tensor(0, device=device, dtype=dtype)
 
@@ -196,15 +196,19 @@ class OutputPMLP(nn.Module):
         atom_scalars = atom_scalars.view(atom_scalars.shape[:2] + (2*self.num_scalars,))
 
         # First MLP applied to each atom
-        x = self.mlp1(atom_scalars)
+        x = self.mlp(atom_scalars)
 
         # Reshape to sum over each atom in molecules, setting non-existent atoms to zero.
         atom_mask = atom_mask.unsqueeze(-1)
+        #import pdb
+        #pdb.set_trace()
         x = torch.where(atom_mask, x, self.zero).sum(1)
+        predict = x.sum(1)
+        
 
         # Prediction on permutation invariant representation of molecules
-        predict = self.mlp2(x)
+        #predict = self.mlp2(x)
 
-        predict = predict.squeeze(-1)
+        #predict = predict.squeeze(-1)
 
         return predict

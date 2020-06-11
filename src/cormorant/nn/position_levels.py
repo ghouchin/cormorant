@@ -69,10 +69,11 @@ class PNetRadialFilter(torch.nn.Module):
         real_edges = torch.where(base_mask.unsqueeze(-1), edges, self.zero)
         complex_edges = torch.zeros(edges.shape, dtype=self.dtype, device=self.device)
         edges = torch.stack((real_edges, complex_edges), dim=-1)
-        #rad_funcs = [SO3Scalar([edges] * (self.max_sh[i] + 1)) for i in range(self.num_levels)]
-        rad_funcs = [edges * (self.max_sh[i] + 1) for i in range(self.num_levels)]
+        rad_funcs = [SO3Scalar([edges] * (self.max_sh[i] + 1)) for i in range(self.num_levels)]
+        return rad_funcs
+        #rad_funcs = [edges * (self.max_sh[i] + 1) for i in range(self.num_levels)]
         # print([ri.shapes for ri in rad_funcs])
-        return SO3Scalar(rad_funcs)
+        #return SO3Scalar(rad_funcs)
 
 
 
@@ -172,10 +173,10 @@ class RadPolyTrig(nn.Module):
         # If desired, mix the radial components to a desired shape
         self.mix = mix
         if (mix == 'cplx') or (mix is True):
-            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, 2*self.num_channels).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
+            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, 2*self.num_channels, bias=True).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
             self.tau = SO3Tau((num_channels,) * (max_sh + 1))
         elif mix == 'real':
-            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, self.num_channels).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
+            self.linear = nn.ModuleList([nn.Linear(2*self.num_rad, self.num_channels, bias=True).to(device=device, dtype=dtype) for _ in range(max_sh+1)])
             self.tau = SO3Tau((num_channels,) * (max_sh + 1))
         elif (mix == 'none') or (mix is False):
             self.linear = None

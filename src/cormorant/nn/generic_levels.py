@@ -85,7 +85,7 @@ class BasicMLP(nn.Module):
         Data type to initialize the level to
     """
 
-    def __init__(self, num_in, num_out, num_hidden=1, layer_width=256, activation='leakyrelu', device=None, dtype=torch.float):
+    def __init__(self, num_in, num_out, num_hidden=1, layer_width=256, activation='leakyrelu', bias=False, device=None, dtype=torch.float):
         if device is None:
             device = torch.device('cpu')
         super(BasicMLP, self).__init__()
@@ -93,10 +93,10 @@ class BasicMLP(nn.Module):
         self.num_in = num_in
 
         self.linear = nn.ModuleList()
-        self.linear.append(nn.Linear(num_in, layer_width))
+        self.linear.append(nn.Linear(num_in, layer_width,bias=bias))
         for i in range(num_hidden-1):
-            self.linear.append(nn.Linear(layer_width, layer_width))
-        self.linear.append(nn.Linear(layer_width, num_out))
+            self.linear.append(nn.Linear(layer_width, layer_width,bias=bias))
+        self.linear.append(nn.Linear(layer_width, num_out,bias=bias))
 
         activation_fn = get_activation_fn(activation)
 

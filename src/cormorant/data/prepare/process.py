@@ -3,8 +3,10 @@ import os
 import torch
 import tarfile
 import numpy as np
+import math
 from torch.nn.utils.rnn import pad_sequence
 from ase.neighborlist import mic
+from cormorant.data.collate import batch_stack
 
 charge_dict = {'H': 1, 'He': 2, 'Li': 3, 'Be': 4, 'B': 5, 'C': 6, 'N': 7, 'O': 8, 'F': 9,
                'Ne': 10, 'Na': 11, 'Mg': 12, 'Al': 13, 'Si': 14, 'P': 15, 'S': 16, 'Cl': 17,
@@ -236,7 +238,7 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
 
     with connect(data) as db:
         for id in file_idx_list:
-            atoms = db.get_atoms(id=id,attach_calculator=False)
+            atoms = db.get_atoms(id=int(id),attach_calculator=False)
             molecules.append(process_file_fn(atoms, force_train))
 
     # Check that all molecules have the same set of items in their dictionary:
@@ -246,6 +248,9 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
     # Convert list-of-dicts to dict-of-lists
     molecules = {prop: [mol[prop] for mol in molecules] for prop in props}
 
+    #need to pad and stack if saving 
+    molecules = {key: batch_stack(val, edge_mat=not bool(3-len(val[0].shape)) ) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
+    #molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
     # If stacking is desireable, pad and then stack.
     # if stack:
     #     molecules = {key: pad_sequence(val, batch_first=True) if val[0].dim() > 0 else torch.stack(val) for key, val in molecules.items()}
@@ -253,14 +258,15 @@ def process_ase(data, process_file_fn, file_ext=None, file_idx_list=None, force_
     return molecules
 
 
-def process_db_row(data, forcetrain=False):
+def process_db_row(data, forcetrain=False, cutoff=None):
     """
     Read an ase-db row and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type.
 
     Parameters
     ----------
-    datafile : python file object
-        File object containing the molecular data in the MD17 dataset.
+    data : ASE atoms object
+    cutoff : float 
+        hard_cutoff for purposes of making sure the cells are large enough for the Minimum Energy Convention
 
     Returns
     -------
@@ -270,24 +276,42 @@ def process_db_row(data, forcetrain=False):
     Notes
     -----
     """
-    molecule = _process_structure(data)
+    if any(data.pbc) and cutoff is not None: #If there are periodic boundary conditions in any direction we will use MIC and make sure the cells are large enough
+        if isinstance(cutoff, list):
+            cutoff=cutoff[0]
 
-    # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
-    if forcetrain:
-        prop_strings = ['energy', 'forces']
-        mol_props = [data.get_potential_energy(), data.get_forces()]
+        n = [math.ceil(2*cutoff/np.linalg.norm(data.cell[i])) if data.pbc[i] else 1 for i in range(3)]
+        molecule = _process_structure(data.repeat(n),MIC=True)
+        energy = np.product(n) * data.get_potential_energy()
+        if forcetrain:
+            prop_strings = ['energy', 'forces']
+            forces = data.get_forces()
+            for i in range(np.product(n)-1):
+                forces = np.append(forces, data.get_forces(), axis=0)
+            mol_props = [torch.Tensor([energy]), torch.from_numpy(forces)]
+        else:
+            prop_strings = ['energy']
+            mol_props = [torch.Tensor([energy])]
     else:
-        prop_strings = ['energy']
-        mol_props = [data.get_potential_energy()]
+        molecule = _process_structure(data, MIC=False)
+
+        # prop_strings = ['energy', 'forces', 'dipole', 'initial_magmoms']
+        if forcetrain:
+            prop_strings = ['energy', 'forces']
+            mol_props = [torch.Tensor([data.get_potential_energy()]), torch.from_numpy(data.get_forces())]
+        else:
+            prop_strings = ['energy']
+            mol_props = [torch.Tensor([data.get_potential_energy()])]
 
     mol_props = dict(zip(prop_strings, mol_props))
     molecule.update(mol_props)
     return molecule
 
 
-def _process_structure(data):
+def _process_structure(data, MIC=True):
     #num_atoms = data.natoms
-    num_atoms = data.get_number_of_atoms()
+    #num_atoms = data.get_number_of_atoms()
+    num_atoms = data.get_global_number_of_atoms()
 
     # atom_charges, atom_positions, rel_positions = [], [], []
     # for i, ri in enumerate(data.positions):
@@ -303,9 +327,12 @@ def _process_structure(data):
     #     rel_positions.append(rel_pos)
 
     rel_positions = np.expand_dims(data.positions, axis=-2) - np.expand_dims(data.positions, axis=-3)
+    if MIC:
+        rel_positions = np.array([mic(atoms_pos, data.cell,pbc=data.pbc) for atoms_pos in rel_positions])    
     rel_positions = torch.from_numpy(rel_positions)
     atom_positions = torch.from_numpy(data.positions)
     atom_charges = torch.from_numpy(data.numbers).float()
+    
 
     molecule = {'num_atoms': num_atoms, 'charges': atom_charges, 'positions': atom_positions, 'relative_pos': rel_positions}
     molecule = {key: torch.tensor(val) for key, val in molecule.items()}

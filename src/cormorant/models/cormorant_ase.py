@@ -7,9 +7,9 @@ from cormorant.cg_lib import CGModule, SphericalHarmonics
 
 from cormorant.models.cormorant_cg import CormorantCG
 
-from cormorant.nn import RadialFilters
-from cormorant.nn import InputMPNN
-from cormorant.nn import OutputPMLP, GetScalarsAtom
+from cormorant.nn import RadialFilters,  DistanceBasis, PNetRadialFilter
+from cormorant.nn import InputMPNN, InputLinear
+from cormorant.nn import OutputPMLP, OutputLinear, GetScalarsAtom
 from cormorant.nn import NoLayer
 
 
@@ -45,7 +45,9 @@ class CormorantASE(CGModule):
                  weight_init, level_gain, charge_power, basis_set,
                  charge_scale, gaussian_mask,
                  top, input, num_mpnn_layers, activation='leakyrelu',
-                 device=None, dtype=None, cg_dict=None):
+                 device=None, dtype=None, cg_dict=None,
+                 use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
+                 use_ag=True, use_sq=True, use_id=True):#, rad_func_type='old'):
 
         logging.info('Initializing network!')
         level_gain = expand_var_list(level_gain, num_cg_levels)
@@ -85,14 +87,20 @@ class CormorantASE(CGModule):
         # Set up position functions, now independent of spherical harmonics
         self.rad_funcs = RadialFilters(max_sh, basis_set, num_channels, num_cg_levels,
                                        device=self.device, dtype=self.dtype)
+
+        #dist_object = DistanceBasis(32, device=self.device, dtype=self.dtype)
+        #self.rad_funcs = PNetRadialFilter(max_sh, dist_object, num_cg_levels, device=self.device, dtype=self.dtype)
+
         tau_pos = self.rad_funcs.tau
 
         num_scalars_in = self.num_species * (self.charge_power + 1)
         num_scalars_out = num_channels[0]
 
-        self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers,
-                                         soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0],
-                                         activation=activation, device=self.device, dtype=self.dtype)
+        #self.input_func_atom = InputMPNN(num_scalars_in, num_scalars_out, num_mpnn_layers,
+        #                                 soft_cut_rad[0], soft_cut_width[0], hard_cut_rad[0],
+        #                                 activation=activation, device=self.device, dtype=self.dtype)
+        self.input_func_atom = InputLinear(num_scalars_in, num_scalars_out, bias=True,
+                                           device=self.device, dtype=self.dtype)
         self.input_func_edge = NoLayer()
 
         tau_in_atom = self.input_func_atom.tau
@@ -103,7 +111,9 @@ class CormorantASE(CGModule):
                                         level_gain, weight_init, cutoff_type,
                                         hard_cut_rad, soft_cut_rad, soft_cut_width,
                                         cat=True, gaussian_mask=gaussian_mask,
-                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict)
+                                        device=self.device, dtype=self.dtype, cg_dict=self.cg_dict,
+                                        use_edge_in=use_edge_in, use_edge_dot=use_edge_dot, use_pos_funcs=use_pos_funcs,
+                                        use_ag=use_ag, use_sq=use_sq, use_id=use_id)
 
         tau_cg_levels_atom = self.cormorant_cg.tau_levels_atom
         tau_cg_levels_edge = self.cormorant_cg.tau_levels_edge
@@ -117,6 +127,8 @@ class CormorantASE(CGModule):
 
         self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
                                             device=self.device, dtype=self.dtype)
+        #self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
+        #                                      device=self.device, dtype=self.dtype) 
         self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
@@ -192,9 +204,11 @@ class CormorantASE(CGModule):
         charge_power, charge_scale, device, dtype = self.charge_power, self.charge_scale, self.device, self.dtype
 
         # atom_positions = data['positions'].to(device, dtype)
-        atom_rel_positions = data['relative_pos'].to(device, dtype)  # relative position vectors
         one_hot = data['one_hot'].to(device, dtype)
         charges = data['charges'].to(device, dtype)
+
+        size = charges.shape[1]
+        atom_rel_positions = data['relative_pos'].to(device, dtype)[:,:size,:size,...]  # relative position vectors 
 
         atom_mask = data['atom_mask'].to(device)
         edge_mask = data['edge_mask'].to(device)

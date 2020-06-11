@@ -5,10 +5,6 @@ from datetime import datetime
 from math import sqrt, inf, ceil
 from cormorant.engine.utils import rel_pos_deriv_to_forces
 
-MAE = torch.nn.L1Loss()
-MSE = torch.nn.MSELoss()
-RMSE = lambda x, y: sqrt(MSE(x, y))
-
 logger = logging.getLogger(__name__)
 
 
@@ -56,20 +52,23 @@ class Engine(object):
         self.device = device
         self.dtype = dtype
 
-    def _save_checkpoint(self, valid_mae):
+    def _save_checkpoint(self, valid_loss):
         if not self.save:
             return
-
         save_dict = {'args': self.args,
                      'model_state': self.model.state_dict(),
                      'optimizer_state': self.optimizer.state_dict(),
                      'scheduler_state': self.scheduler.state_dict(),
                      'epoch': self.epoch,
                      'minibatch': self.minibatch,
-                     'best_loss': self.best_loss}
+                     'best_loss': self.best_loss,
+                     'stats': self.stats,
+                     'max_charge': self.dataloaders['train'].dataset.max_charge,
+                     'included_species': self.dataloaders['train'].dataset.included_species,
+                     'num_species': self.dataloaders['train'].dataset.num_species}
 
-        if (valid_mae < self.best_loss):
-            self.best_loss = save_dict['best_loss'] = valid_mae
+        if (valid_loss < self.best_loss):
+            self.best_loss = save_dict['best_loss'] = valid_loss
             logging.info('Lowest loss achieved! Saving best result to file: {}'.format(self.bestfile))
             torch.save(save_dict, self.bestfile)
 
@@ -126,8 +125,8 @@ class Engine(object):
 
             # Loop over splits, predict, and output/log predictions
             for split in splits:
-                predict, targets, losses = self.predict(split)
-                self.log_predict(predict, targets, losses, split, description='Final')
+                losses, mae, rmse, predict, targets = self.predict(split)
+                self.log_predict(predict, targets, losses, mae, rmse, split, description='Final')
 
         # Evaluate best model as determined by validation error
         if best:
@@ -139,8 +138,8 @@ class Engine(object):
 
             # Loop over splits, predict, and output/log predictions
             for split in splits:
-                predict, targets, loss = self.predict(split)
-                self.log_predict(predict, targets, loss, split, description='Best')
+                loss, mae, rmse, predict, targets = self.predict(split)
+                self.log_predict(predict, targets, loss, mae, rmse, split, description='Best')
         logging.info('Inference phase complete!')
 
     def _warm_restart(self, epoch):
@@ -155,16 +154,14 @@ class Engine(object):
                 self.scheduler.T_max *= ceil(self.num_train / self.batch_size)
             self.scheduler.step(0)
 
-    def _log_minibatch(self, batch_idx, loss, targets, predict, batch_t, epoch_t):
+    def _log_minibatch(self, batch_idx, loss, mini_batch_mae, mini_batch_rmse, batch_t, epoch_t):
         mini_batch_loss = loss.item()
-        mini_batch_mae = MAE(predict, targets)
-        mini_batch_rmse = RMSE(predict, targets)
 
         # Exponential average of recent MAE/RMSE on training set for more convenient logging.
         if batch_idx == 0:
             self.mae, self.rmse = mini_batch_mae, mini_batch_rmse
         else:
-            alpha = self.alpha
+            alpha = self.alpha 
             self.mae = alpha * self.mae + (1 - alpha) * mini_batch_mae
             self.rmse = alpha * self.rmse + (1 - alpha) * mini_batch_rmse
 
@@ -200,14 +197,13 @@ class Engine(object):
 
             self._warm_restart(epoch)
             self._step_lr_epoch()
+
             train_predict, train_targets, train_loss  = self.train_epoch()
-            valid_predict, valid_targets, valid_loss = self.predict('valid')
+            valid_loss, valid_mae, valid_rmse, valid_predict, valid_targets = self.predict('valid')
 
-            train_loss, train_mae, train_rmse = self.log_predict(train_predict, train_targets, train_loss, 'train', epoch=epoch)
-            valid_loss, valid_mae, valid_rmse = self.log_predict(valid_predict, valid_targets, valid_loss, 'valid', epoch=epoch)
+            self.log_predict(train_predict, train_targets, train_loss, self.mae, self.rmse, 'train', epoch=epoch)
+            self.log_predict(valid_predict, valid_targets, valid_loss, valid_mae, valid_rmse, 'valid', epoch=epoch)
 
-
-            #This needs to be changed so that valid_loss is passed to log_predict and not returned from it!
             self._save_checkpoint(valid_loss)
 
             logging.info('Epoch {} complete!'.format(epoch+1))
@@ -218,10 +214,11 @@ class Engine(object):
         If a stats dictionary is included, return a normalized learning target.
         """
         targets = data[self.target].to(self.device, self.dtype)
+        
 
         if stats is not None:
-            mu, sigma = stats[self.target]
-            targets = (targets - mu) / sigma
+            mu, sigma = stats[self.target] #mu is the average energy per atom and std is the standard deviation of the total energies.
+            targets = (targets - mu*data['num_atoms'].to(self.device)) / sigma
 
         return targets
 
@@ -239,90 +236,97 @@ class Engine(object):
             batch_t = datetime.now()
 
             # Calculate loss and backprop
-            #import pdb
-            #pdb.set_trace()
-            loss, predict, targets = self.compute_single_batch(data)
+            loss, mse, mae, predict, targets = self.compute_single_batch(data)
+            mae = mae.detach().cpu()
             loss.backward()
-            # ####### DEBUG
-            #params = list(self.model.parameters()) 
-            #params[-2].grad
-            # params = list(self.model.parameters())
-            # print(torch.tensor([torch.max(p0.grad) for p0 in params]))
-            # print(torch.tensor([torch.min(p0.grad) for p0 in params]))
-            # print(torch.tensor([torch.min(torch.abs(p0.grad)) for p0 in params]))
-            # raise Exception
-            # ####### DEBUG
+
 
             # Step optimizer and learning rate
             self.optimizer.step()
             self._step_lr_batch()
 
+            mse = mse.detach().cpu() 
             targets, predict = targets.detach().cpu(), predict.detach().cpu()
             loss = loss.detach().cpu()
+            
             all_predict.append(predict)
             all_targets.append(targets)
-            all_loss += loss
 
-            self._log_minibatch(batch_idx, loss, targets, predict, batch_t, epoch_t)
+            all_loss += loss 
+
+            #the running total of MAE and RMSE is calcuated here and saved to self.mae, self.rmse
+            self._log_minibatch(batch_idx, loss, mae, sqrt(mse), batch_t, epoch_t)
 
             self.minibatch += 1
 
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
 
-
-        return all_predict, all_targets, all_loss
+        return all_predict, all_targets, all_loss 
 
     def compute_single_batch(self, data):
         # Standard zero-gradient
         self.optimizer.zero_grad()
-
         targets = self._get_target(data, self.stats)
         predict = self.model(data)
+        data['num_atoms'] = data['num_atoms'].to(self.device)
+        loss = self.loss_fn(predict/data['num_atoms'], targets/data['num_atoms'])
+        mse = loss
+        mae = torch.nn.functional.l1_loss(predict/data['num_atoms'], targets/data['num_atoms'])
 
-        loss = self.loss_fn(predict, targets)
-        return loss, predict, targets
+        mu, sigma = self.stats[self.target] #mu is the average energy per atom and std is the standard deviation of the total energies. 
+        predict = sigma*predict + mu*data['num_atoms']
+        targets = sigma*targets + mu*data['num_atoms']
+        predict = predict/data['num_atoms']
+        targets = targets/data['num_atoms']
+
+        data['num_atoms'] = data['num_atoms'].detach().cpu()
+        return loss, mse, mae, predict, targets
 
     def predict(self, set='valid'):
         dataloader = self.dataloaders[set]
 
         self.model.eval()
-        all_predict, all_targets, all_loss = [], [], []
+        all_loss, all_mae, all_mse = 0, 0, 0
+        all_predict, all_targets = [], []
         start_time = datetime.now()
         logging.info('Starting testing on {} set: '.format(set))
 
 
-        # for batch_idx, data in enumerate(dataloader):
         for data in dataloader:
             
-            loss, predict, targets = self.compute_single_batch(data)
+            loss, mse, mae, predict, targets = self.compute_single_batch(data)
             loss = loss.detach().cpu()
+            mse = mse.detach().cpu()
+            mae = mae.detach().cpu()
+
             predict, targets = targets.detach().cpu(), predict.detach().cpu()
             all_targets.append(targets)
             all_predict.append(predict)
-            all_loss.append(loss.unsqueeze(0))
 
+            all_mse += mse*data['energy'].shape[0] #generating sum of square errors
+            all_mae += mae*data['energy'].shape[0] #generating sum of abs errors 
+            all_loss += loss*data['energy'].shape[0]
+        
+        N = len(dataloader.dataset.data['energy'])
+        all_rmse = sqrt(all_mse/N)
+        all_mae /= N 
+        all_loss /= N
         all_predict = torch.cat(all_predict)
         all_targets = torch.cat(all_targets)
-        all_loss = torch.cat(all_loss)
 
         dt = (datetime.now() - start_time).total_seconds()
         logging.info(' Done! (Time: {}s)'.format(dt))
 
-        return all_predict, all_targets, all_loss
+        return all_loss, all_mae, all_rmse, all_predict, all_targets
+        
 
-    def log_predict(self, predict, targets, losses, dataset, epoch=-1, description='Current'):
-        predict = predict.cpu().double()
-        targets = targets.cpu().double()
-
-        mae = MAE(predict, targets)
-        rmse = RMSE(predict, targets)
-
+    def log_predict(self, predict, targets, loss, mae, rmse, dataset, epoch=-1, description='Current'):
         mu, sigma = self.stats[self.target]
         mae_units = sigma*mae
         rmse_units = sigma*rmse
-        loss = torch.mean(losses)
-        loss_units = sigma*loss
+        loss_units = sigma*sigma*loss
+
 
         datastrings = {'train': 'Training', 'test': 'Testing', 'valid': 'Validation'}
 
@@ -342,8 +346,6 @@ class Engine(object):
             logging.info('Saving predictions to file: {}'.format(file))
             torch.save({'predict': predict, 'targets': targets}, file)
 
-        return loss, mae, rmse
-
 
 class ForceEngine(Engine):
     def __init__(self, args, dataloaders, model, loss_fn, optimizer, scheduler, target, restart_epochs,
@@ -353,6 +355,71 @@ class ForceEngine(Engine):
                          bestfile, checkfile, num_epoch, num_train, batch_size, device, dtype, save=save, load=load,
                          alpha=alpha, lr_minibatch=lr_minibatch, predictfile=predictfile, textlog=textlog)
         self.uses_relative_pos = uses_relative_pos
+
+    def train(self):
+        epoch0 = self.epoch
+        for epoch in range(epoch0, self.num_epoch):
+            self.epoch = epoch
+            # epoch_time = datetime.now()                                                                                                                                                                                                                                                                    
+            logging.info('Starting Epoch: {}'.format(epoch+1))
+
+            self._warm_restart(epoch)
+            self._step_lr_epoch()
+
+            train_predict, train_targets, train_loss  = self.train_epoch()
+            valid_loss, valid_mae, valid_rmse, valid_force_rmse, valid_predict, valid_targets = self.predict('valid')
+
+            self.log_predict(train_predict, train_targets, train_loss, self.mae, self.rmse, self.force_rmse, 'train', epoch=epoch)
+            self.log_predict(valid_predict, valid_targets, valid_loss, valid_mae, valid_rmse, valid_force_rmse, 'valid', epoch=epoch)
+
+            self._save_checkpoint(valid_loss)
+
+            logging.info('Epoch {} complete!'.format(epoch+1))
+
+
+    def train_epoch(self):
+        dataloader = self.dataloaders['train']
+
+        self.mae, self.rmse, self.force_rmse, self.batch_time = 0, 0, 0, 0
+        all_loss = 0
+        all_predict, all_targets = [], []
+
+
+        self.model.train()
+        epoch_t = datetime.now()
+        for batch_idx, data in enumerate(dataloader):
+            batch_t = datetime.now()
+
+            # Calculate loss and backprop                                                                                                                                                                                                                                                                    
+            loss, mse, mae, force_mse, predict, targets = self.compute_single_batch(data)
+            mae = mae.detach().cpu()
+            loss.backward()
+
+            # Step optimizer and learning rate                                                                                                                                                                                                                                                               
+            self.optimizer.step()
+            self._step_lr_batch()
+
+            mse = mse.detach().cpu()
+            force_mse = force_mse.detach().cpu()
+            targets, predict = targets.detach().cpu(), predict.detach().cpu()
+            loss = loss.detach().cpu()
+
+            all_predict.append(predict)
+            all_targets.append(targets)
+
+            all_loss += loss
+
+            #the running total of MAE and RMSE is calcuated here and saved to self.mae, self.rmse                                                                                                                                                                                                            
+            self._log_minibatch(batch_idx, loss, mae, sqrt(mse), sqrt(force_mse), batch_t, epoch_t)
+            
+
+            self.minibatch += 1
+
+        all_predict = torch.cat(all_predict)
+        all_targets = torch.cat(all_targets)
+
+        return all_predict, all_targets, all_loss
+
 
     def compute_single_batch(self, data):
         # Standard zero-gradient
@@ -364,6 +431,9 @@ class ForceEngine(Engine):
         if self.stats is not None:
             __, sigma = self.stats[self.target]
             force_scaled /= sigma
+        s = force_scaled.shape
+
+        #force_scaled = (force_scaled.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s) #hack to get force on an atom divided by num_atoms
         
         data['relative_pos'] = data['relative_pos'].to(self.device, self.dtype)
         data['positions'] = data['positions'].to(self.device, self.dtype)
@@ -373,35 +443,134 @@ class ForceEngine(Engine):
         else:
             pos_input = data['positions']
         pos_input.requires_grad_()
-        #force_scaled.requires_grad_()
 
         energy_pred = self.model(data)
-        force_pred = []
-        for i, pred in enumerate(energy_pred):
-            force_i = -torch.autograd.grad(pred, pos_input, create_graph=True, retain_graph=True)[0]
-            force_i = force_i[i]
-            if self.uses_relative_pos:
-                force_i[~data['edge_mask'][i]] = 0.
-                force_i = rel_pos_deriv_to_forces(force_i)
-            else:
-                force_i[~data['atom_mask'][i]] = 0.
-            force_pred.append(force_i)
-        force_pred = torch.stack(force_pred)
 
+        Esum = torch.sum(energy_pred, dim=0)
+        force_pred = -torch.autograd.grad(Esum, pos_input, create_graph=True, retain_graph=True)[0] 
+        if self.uses_relative_pos:
+            force_pred[~data['edge_mask']] = 0.
+            force_pred = rel_pos_deriv_to_forces(force_pred)
+        else:
+            force_pred[~data['atom_mask']] = 0.
+
+        #force_pred = (force_pred.view(s[0],-1).t()/data['num_atoms'].to(self.device)).t().view(s)
+        data['num_atoms'] = data['num_atoms'].to(self.device)
         # Calculate loss and backprop
-        loss = self.loss_fn(energy_pred, force_pred, energy_scaled, force_scaled)
+        loss, mse, force_mse = self.loss_fn(energy_pred/data['num_atoms'], force_pred, energy_scaled/data['num_atoms'], force_scaled)
+        mae = torch.nn.functional.l1_loss(energy_pred/data['num_atoms'], energy_scaled/data['num_atoms'])
 
-        return loss, energy_pred, energy_scaled
+        mu, sigma = self.stats[self.target]
+        energy_pred = sigma*energy_pred + mu*data['num_atoms']
+        energy_scaled = sigma*energy_scaled + mu*data['num_atoms']
+        energy_pred = energy_pred/data['num_atoms']
+        energy_scaled = energy_scaled/data['num_atoms']
+        
+        data['num_atoms'] = data['num_atoms'].detach().cpu()
+        return loss, mse, mae, force_mse, energy_pred, energy_scaled  
+        
+
+    def predict(self, set='valid'):
+        dataloader = self.dataloaders[set]
+
+        self.model.eval()
+        all_loss, all_mae, all_mse, all_force_mse = 0, 0, 0, 0
+        all_predict, all_targets = [], []
+        start_time = datetime.now()
+        logging.info('Starting testing on {} set: '.format(set))
+
+
+        for data in dataloader:
+
+            loss, mse, mae, force_mse, predict, targets = self.compute_single_batch(data)
+            loss = loss.detach().cpu()
+            mse = mse.detach().cpu()
+            mae = mae.detach().cpu()
+            force_mse = force_mse.detach().cpu()
+            predict, targets = targets.detach().cpu(), predict.detach().cpu()
+            all_targets.append(targets)
+            all_predict.append(predict)
+
+            all_mse += mse*data['energy'].shape[0] #generating sum of square errors
+            all_mae += mae*data['energy'].shape[0] #generating sum of abs errors
+            all_force_mse += force_mse*data['energy'].shape[0] #generating sum of square errors
+            all_loss += loss*data['energy'].shape[0]
+
+        N = len(dataloader.dataset.data['energy'])
+        all_rmse = sqrt(all_mse/N)
+        all_force_rmse = sqrt(all_force_mse/N)
+        all_mae /= N
+        all_loss /= N
+        all_predict = torch.cat(all_predict)
+        all_targets = torch.cat(all_targets)
+
+        dt = (datetime.now() - start_time).total_seconds()
+        logging.info(' Done! (Time: {}s)'.format(dt))
+
+        return all_loss, all_mae, all_rmse, all_force_rmse, all_predict, all_targets
+
+
+    def _log_minibatch(self, batch_idx, loss, mini_batch_mae, mini_batch_rmse, mini_batch_force_rmse, batch_t, epoch_t):
+        mini_batch_loss = loss.item()
+
+        # Exponential average of recent MAE/RMSE on training set for more convenient logging.                                                                                                                                                                                                                
+        if batch_idx == 0:
+            self.mae, self.rmse, self.force_rmse = mini_batch_mae, mini_batch_rmse, mini_batch_force_rmse
+        else:
+            alpha = self.alpha
+            self.mae = alpha * self.mae + (1 - alpha) * mini_batch_mae
+            self.rmse = alpha * self.rmse + (1 - alpha) * mini_batch_rmse
+            self.force_rmse = alpha * self.force_rmse + (1 - alpha) * mini_batch_force_rmse
+        dtb = (datetime.now() - batch_t).total_seconds()
+        tepoch = (datetime.now() - epoch_t).total_seconds()
+        self.batch_time += dtb
+        tcollate = tepoch-self.batch_time
+
+        if self.textlog:
+            logstring = ' E:{:3}, B: {:5}/{}'.format(self.epoch+1, batch_idx, len(self.dataloaders['train']))
+            logstring += '{:> 9.4f}{:> 9.4f}{:> 9.4f}'.format(sqrt(mini_batch_loss), self.mae, self.rmse)
+            logstring += '  dt:{:> 6.2f}{:> 8.2f}{:> 8.2f}'.format(dtb, tepoch, tcollate)
+            logstring += '  {:.2E}'.format(self.scheduler.get_lr()[0])
+            logging.info(logstring)
+
+        if self.summarize:
+            self.summarize.add_scalar('train/mae', sqrt(mini_batch_loss), self.minibatch)
+
+
+
+    def log_predict(self, predict, targets, loss, mae, rmse, force_rmse, dataset, epoch=-1, description='Current'):
+        mu, sigma = self.stats[self.target]
+        mae_units = sigma*mae
+        rmse_units = sigma*rmse
+        loss_units = sigma*sigma*loss
+        force_rmse_units = sigma*force_rmse
+
+
+        datastrings = {'train': 'Training', 'test': 'Testing', 'valid': 'Validation'}
+
+        if epoch >= 0:
+            suffix = 'final'
+            logstr = 'Epoch: {} Complete! {} {} Loss: {:8.4f} w/units: {:8.4f}.  MAE: {:8.4f} w/units: {:8.4f} RMSE: {:8.4f} w/units: {:8.4f}, FRMSE: {:8.4f} w/units: {:8.4f}'
+            logstr = logstr.format(epoch+1, description, datastrings[dataset], loss, loss_units, mae, mae_units, rmse, rmse_units, force_rmse, force_rmse_units)
+            logging.info(logstr)
+        else:
+            suffix = 'best'
+            logstr = 'Training: {} Complete! {} {} Loss: {:8.4f} w/units: {:8.4f}.  MAE: {:8.4f} w/units: {:8.4f} RMSE: {:8.4f} w/units: {:8.4f}, FRMSE: {:8.4f} w/units: {:8.4f}'
+            logstr = logstr.format(epoch+1, description, datastrings[dataset], loss, loss_units, mae, mae_units, rmse, rmse_units, force_rmse, force_rmse_units)
+            logging.info(logstr)
+
+        if self.predictfile is not None:
+            file = self.predictfile + '.' + suffix + '.' + dataset + '.pt'
+            logging.info('Saving predictions to file: {}'.format(file))
+            torch.save({'predict': predict, 'targets': targets}, file)
+
 
 
 def energy_and_force_mse_loss(energy_pred, force_pred, energy_scaled, force_scaled, force_factor=0.):
     """
     Basic MSE loss on the energies and forces
     """
-    #import pdb
-    #pdb.set_trace()
     energy_mse = torch.nn.functional.mse_loss(energy_pred, energy_scaled)
     force_mse = torch.nn.functional.mse_loss(force_pred, force_scaled)
-    # loss = energy_mse + force_factor * force_mse
     loss = energy_mse  + force_factor * force_mse
-    return loss
+    return loss, energy_mse, force_mse
