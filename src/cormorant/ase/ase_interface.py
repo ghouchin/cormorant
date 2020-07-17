@@ -30,7 +30,7 @@ class ASEInterface(Calculator):
 
     @classmethod
     # def load(cls, filename, num_species, included_species=None):
-    def load(cls, filename,cuda=None):
+    def load(cls, filename,cuda=None, output_mlp=False):
         saved_run = torch.load(filename)
         args = saved_run['args']
         if cuda is not None:
@@ -44,7 +44,7 @@ class ASEInterface(Calculator):
                                       args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                                       max_charge, args.gaussian_mask,
                                       args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
-                                      device=device, dtype=dtype)
+                                      device=device, dtype=dtype, output_mlp=False)
         #model = CormorantMD17(args.maxl, args.max_sh, args.num_cg_levels, args.num_channels, num_species,
         #                              args.cutoff_type, args.hard_cut_rad, args.soft_cut_rad, args.soft_cut_width,
         #                              args.weight_init, args.level_gain, args.charge_power, args.basis_set,
@@ -59,7 +59,7 @@ class ASEInterface(Calculator):
         calc.included_species = saved_run['included_species']  
         return calc
 
-    def train(self, database, workdir=None, force_factor=0., num_epoch=256, num_channels=None, lr_init=5.e-4, lr_final=5.e-6, batch_size=20, label=None, cutoff=None):
+    def train(self, database, workdir=None, force_factor=0., num_epoch=256, num_channels=None, lr_init=5.e-4, lr_final=5.e-6, batch_size=20, label=None, cutoff=None, output_mlp=False):
         # This makes printing tensors more readable.
         torch.set_printoptions(linewidth=1000, threshold=100000)
         logging.getLogger('')
@@ -110,7 +110,7 @@ class ASEInterface(Calculator):
                                       args.weight_init, args.level_gain, args.charge_power, args.basis_set,
                                       max_charge, args.gaussian_mask,
                                       args.top, args.input, args.num_mpnn_levels, activation='leakyrelu',
-                                      device=device, dtype=dtype)
+                                      device=device, dtype=dtype, output_mlp=output_mlp)
 
         # Initialize the scheduler and optimizer
         optimizer = init_optimizer(self.model, args.optim, lr_init, args.weight_decay)

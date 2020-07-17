@@ -47,7 +47,7 @@ class CormorantASE(CGModule):
                  top, input, num_mpnn_layers, activation='leakyrelu',
                  device=None, dtype=None, cg_dict=None,
                  use_edge_in=True, use_edge_dot=True, use_pos_funcs=True,
-                 use_ag=True, use_sq=True, use_id=True):#, rad_func_type='old'):
+                 use_ag=True, use_sq=True, use_id=True, output_mlp=False):#, rad_func_type='old'):
 
         logging.info('Initializing network!')
         level_gain = expand_var_list(level_gain, num_cg_levels)
@@ -124,11 +124,13 @@ class CormorantASE(CGModule):
 
         num_scalars_atom = self.get_scalars_atom.num_scalars
         num_scalars_edge = self.get_scalars_edge.num_scalars
-
-        self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
-                                            device=self.device, dtype=self.dtype)
-        #self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
-        #                                      device=self.device, dtype=self.dtype) 
+        
+        if output_mlp:
+            self.output_layer_atom = OutputPMLP(num_scalars_atom, activation=activation,
+                                                device=self.device, dtype=self.dtype)
+        else:
+            self.output_layer_atom = OutputLinear(num_scalars_atom, bias=False,
+                                                  device=self.device, dtype=self.dtype) 
         self.output_layer_edge = NoLayer()
 
         logging.info('Model initialized. Number of parameters: {}'.format(
